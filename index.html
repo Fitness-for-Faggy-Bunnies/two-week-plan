@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Two-Week Split</title>
+  <meta name="description" content="Benny and Mat's two-week workout plan and tracker.">
+  <meta name="theme-color" content="#12181a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Two-Week Split">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <h1>Two-Week Split</h1>
+    <span class="sync" id="sync">Connecting</span>
+    <button class="who hidden" id="who" type="button" aria-label="Switch person"></button>
+    <button class="icon-btn" id="gear" type="button" aria-label="Settings">⚙</button>
+  </header>
+  <main id="main"><p class="muted">Loading…</p></main>
+  <nav class="tabs hidden" id="tabs" aria-label="Sections">
+    <button type="button" data-view="today"><span>◉</span>Today</button>
+    <button type="button" data-view="log"><span>✎</span>Log</button>
+    <button type="button" data-view="progress"><span>↗</span>Progress</button>
+    <button type="button" data-view="body"><span>◐</span>Body</button>
+    <button type="button" data-view="report"><span>☰</span>Report</button>
+  </nav>
+  <div id="overlay"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
