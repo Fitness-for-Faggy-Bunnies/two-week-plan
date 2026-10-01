@@ -4,8 +4,8 @@ import * as F from "./fun.js";
 import { safetyFor } from "./safety.js";
 import * as S from "./stats.js";
 import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
-import { connect, save, remove, importAll, COLLECTIONS, watchAuth, signInGoogle, signInEmail, createEmailAccount, resetPassword, signOutNow, addGoogle, addPassword, currentInfo,
-  getUserDoc, createCrew, joinCrew, watchCrew, updateMember, removeMember, renameCrew, newInviteCode, readLegacy } from "./firebase.js";
+import { connect, save, remove, patch, dropField, signOutAndClear, importAll, COLLECTIONS, watchAuth, signInGoogle, signInEmail, createEmailAccount, resetPassword, addGoogle, addPassword, currentInfo,
+  getUserDoc, setUserDoc, createCrew, joinCrew, watchCrew, updateMember, removeMember, renameCrew, newInviteCode, readLegacy } from "./firebase.js";
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,7 +30,17 @@ function P(id) {
   return (profMemo.map[id] = p);
 }
 const PROFILES = new Proxy({}, { get: (_, id) => P(id) });
-const profileIds = () => [...new Set([...Object.keys(SEEDS), ...state.data.profiles.filter(p => !p.archived).map(p => p.id)])].filter(id => !state.data.profiles.find(p => p.id === id && p.archived));
+// Mat and Benny are built in, but only show up in a crew that actually has their data (so new crews start empty).
+let idsMemo = { refs: [], ids: [] };
+function profileIds() {
+  const d = state.data; const refs = [d.profiles, d.sessions, d.body, d.activities, state.auth?.members];
+  if (refs.every((r, i) => r === idsMemo.refs[i])) return idsMemo.ids;
+  const used = new Set([...d.sessions, ...d.body, ...d.activities].map(x => x.user).concat((state.auth?.members || []).map(m => m.profileId)));
+  const ids = [...new Set([...Object.keys(SEEDS).filter(id => used.has(id)), ...d.profiles.map(p => p.id)])]
+    .filter(id => !d.profiles.find(p => p.id === id && p.archived));
+  idsMemo = { refs, ids };
+  return ids;
+}
 const other = u => { const pid = state.partnerId && state.partnerId !== u ? state.partnerId : null; return pid || profileIds().find(id => id !== u) || u; };
 S.setProfileSource(P);
 const cardioProgram = u => CARDIO[P(u).cardio === "intervals" ? "benny" : "mat"];
@@ -98,7 +108,7 @@ const state = {
   variants: store.get("twp-variants", {}),
   editing: new Set(),
   data: { sessions: [], body: [], activities: [], settings: [], library: [], profiles: [], pings: [] }, libF: { q: "", equip: "all", focus: "all", pattern: "all", difficulty: "all", effort: "all", impact: "all", sort: "name", hideSore: "yes", ...store.get("twp-libf", {}) }, libEdit: null, libSwapFor: null, addPlan: null, planEdit: false,
-  flags: {}, error: null,
+  flags: {}, error: null, raw: {},
   progTab: "lifts", progEx: null, bodyField: "weight",
   repTab: "cycle", repCycle: null, cmpA: null, cmpB: null,
   confirmDel: null, timer: null, overlay: null, pickerQ: "",
@@ -124,11 +134,19 @@ const variantOf = (u, ex) => state.variants[`${u}:${ex.id}`] || (P(u).defaultVar
 const sid = (u, date) => `${u}_${date}`;
 const sessionFor = (u, date) => state.data.sessions.find(s => s.id === sid(u, date)) || state.data.sessions.find(s => s.user === u && s.date === date) || null;
 
-function writeSession(u, date, patch) {
+// Only the changed fields are sent, so a partner logging on another phone can't wipe out what you saved.
+function writeSession(u, date, fields) {
   const cur = sessionFor(u, date);
-  const base = cur ? { ...cur } : { user: u, date, week: state.sel.week, day: state.sel.day, exercises: [] };
-  delete base.id; delete base.updatedAt;
-  save("sessions", sid(u, date), { ...base, ...patch });
+  const ident = !cur || cur.id !== sid(u, date) ? { user: u, date, week: cur?.week || state.sel.week, day: cur?.day || state.sel.day } : {};
+  patch("sessions", sid(u, date), { ...ident, ...fields });
+}
+// Exercises are stored as a map keyed by exercise id (ex.<id>); older records used an array. Readers get one sorted array.
+function normalizeSession(s) {
+  if (!s.ex) return s;
+  const map = Object.fromEntries(Object.entries(s.ex).filter(([, v]) => v));
+  const legacy = (s.exercises || []).filter(e => !map[e.id]);
+  const all = [...legacy, ...Object.values(map)].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
+  return { ...s, exercises: all };
 }
 
 // Tonight's first version saved a new document per save. Fold any duplicates into one per person per day.
@@ -147,9 +165,11 @@ function consolidate() {
     const latest = (f) => docs.map(d => d[f]).filter(v => v && (typeof v !== "object" || Object.keys(v).length)).pop();
     const cardio = docs.map(d => d.cardio).filter(c => c?.done).pop() || null;
     const notes = [...new Set(docs.map(d => d.notes).filter(Boolean))].join(" ");
-    const merged = { user, date, week: docs[0].week, day: docs[0].day, exercises: [...ex.values()], cardio, pain: latest("pain") || null, recovery: latest("recovery") || null, notes };
+    const exMap = {}; [...ex.values()].forEach((e, i) => { exMap[e.id] = { ...e, order: e.order ?? i }; });
+    const merged = { user, date, week: docs[0].week, day: docs[0].day, exercises: [], ex: exMap, cardio, pain: latest("pain") || null, recovery: latest("recovery") || null, notes };
     if (merged.pain || merged.recovery || notes) merged.checkin = true;
-    save("sessions", sid(user, date), merged);
+    // Merge rather than overwrite, in case the other phone saved something to this day a moment ago.
+    patch("sessions", sid(user, date), merged);
     for (const d of docs) if (d.id !== sid(user, date)) remove("sessions", d.id);
   }
   merging = false;
@@ -212,9 +232,11 @@ function render() {
     main.innerHTML = `<section class="pick"><h2>Who's training?</h2>
       <div class="pick-people">${profileIds().map(id => `<button class="btn person" data-act="pickUser" data-u="${id}">${avatarHtml(id, true)}<span>${esc(P(id).name)}</span></button>`).join("")}</div>
       <button class="btn" data-act="newProfile">+ New person</button>
+      ${isOwner() && !state.data.sessions.length ? `<button class="btn small" data-act="legacyQuick">Bring over data from the first version</button>` : ""}
       <p class="muted small">You can switch any time from the name button at the top.</p></section>`;
     return;
   }
+  if (profileIds().length < 2) state.partner = false;
   if (!state.partner) state.logUser = state.user;
   $("#tabs").classList.remove("hidden"); $("#gear").classList.remove("hidden"); $("#sync").classList.remove("hidden");
   const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user) + esc(P(state.user).name) + (state.partner ? " + " + esc(P(other(state.user)).name) : "");
@@ -624,7 +646,7 @@ function planEditBox(u, week, day) {
     <label class="field">Day name<input type="text" data-act="planTitle" value="${esc(dayTitle(u, week, day))}"></label>
     ${removed.length ? `<div class="field"><span>Removed from this day</span>${removed.map(e => `<div class="list-item"><span>${esc(e.n)}</span><button class="btn small" data-act="planRestore" data-id="${e.id}">Put back</button></div>`).join("")}</div>` : ""}
     <div class="row"><button class="btn small" data-act="planFromLib">+ Add from the library</button>
-      <button class="btn small" data-act="planCopy">Copy this day to ${esc(P(other(u)).name)}</button>
+      ${other(u) !== u ? `<button class="btn small" data-act="planCopy">Copy this day to ${esc(P(other(u)).name)}</button>` : ""}
       <button class="btn small danger" data-act="planClear">${state.confirmDel === "planClear" ? "Tap again to clear" : "Clear this day"}</button>
       <button class="btn small" data-act="planReset">${state.confirmDel === "planReset" ? "Tap again to reset" : "Reset to original"}</button></div>`;
 }
@@ -639,7 +661,7 @@ function drawAddPlan() {
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Add to plan"><div class="inner">
     <div class="between"><h2 class="h2">Add to plan</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
     <p><b>${esc(m.name)}</b> · ${esc(m.sr)}</p>
-    <div class="field"><span>Whose plan</span>${segA("who", [["mat", "Mat"], ["benny", "Benny"], ["both", "Both"]])}</div>
+    <div class="field"><span>Whose plan</span>${segA("who", [...profileIds().map(id => [id, P(id).name]), ...(profileIds().length > 1 ? [["both", profileIds().length > 2 ? "Me + partner" : "Both"]] : [])])}</div>
     <div class="field"><span>Week</span>${segA("week", [["A", "Week A"], ["B", "Week B"], ["AB", "Both weeks"]])}</div>
     <div class="field"><span>Day</span><div class="chips">${DAYS.map(d => `<button data-act="apSet" data-k="day" data-v="${d}" aria-pressed="${a.day === d}">${d}<small>${esc(PLAN.A[d].title.split(",")[0])}</small></button>`).join("")}</div></div>
     <button class="btn primary block" data-act="apSave">Add to plan</button>
@@ -679,9 +701,10 @@ function avatarHtml(id, big) {
   const p = P(id);
   return `<span class="av ${big ? "big" : ""}" style="--c:${esc(p.color)}" aria-hidden="true">${esc(p.avatar || (p.name || "?")[0].toUpperCase())}</span>`;
 }
-function saveProfile(id, patch) {
-  const cur = { ...P(id) }; delete cur.id; delete cur.updatedAt;
-  save("profiles", id, { ...cur, ...patch });
+function saveProfile(id, fields) {
+  const exists = state.data.profiles.some(p => p.id === id);
+  const base = exists ? {} : (({ id: _i, updatedAt: _u, ...rest }) => rest)(P(id));
+  patch("profiles", id, { ...base, ...fields });
   profMemo = { src: null, map: {} };
 }
 function celebrate(kind, text) {
@@ -832,9 +855,10 @@ function checkAchievements() {
 function handlePings() {
   const u = state.user; if (!u) return;
   const p = state.data.pings.find(x => x.id === `to_${u}`); if (!p) return;
-  const key = `twp-hi5-${u}`; const seen = store.get(key, 0);
-  store.set(key, p.at);
-  if (seen && p.at > seen && funAt("medium")) {
+  // First run on this phone: still show a high-five from the last 12 hours.
+  const key = `twp-hi5-${u}`; const seen = store.get(key, Date.now() - 12 * 3600e3);
+  store.set(key, Math.max(p.at, seen));
+  if (p.at > seen && funAt("medium")) {
     const el = document.createElement("div"); el.className = "hi5-burst"; el.textContent = "🙌"; document.body.appendChild(el); setTimeout(() => el.remove(), 1400);
     toast(F.say(P(u).voice, "hi5got", { name: P(p.from)?.name || "Your partner" })); if (P(u).sound) F.chime(); navigator.vibrate?.([80, 60, 80]);
   }
@@ -917,7 +941,7 @@ function openSettings() {
     ${crewSettings()}
     <section class="card"><h3 class="h3">Who's using this phone</h3>${personToggle("pickUser", u)}
       <div class="row"><button class="btn small" data-act="editProfile">Edit ${esc(p.name)}'s profile</button><button class="btn small" data-act="newProfile">+ New person</button></div>
-      <label class="check"><input type="checkbox" data-act="partner" ${state.partner ? "checked" : ""}><span>Partner mode: log for a partner from this phone</span></label>
+      ${profileIds().length > 1 ? `<label class="check"><input type="checkbox" data-act="partner" ${state.partner ? "checked" : ""}><span>Partner mode: log for a partner from this phone</span></label>` : ""}
       ${profileIds().length > 2 ? `<div class="field"><span>Training partner</span>${one("pickPartner", other(u), profileIds().filter(id => id !== u).map(id => [id, P(id).name]))}</div>` : ""}</section>
     <section class="card"><h3 class="h3">Look</h3>
       <div class="themes">${Object.entries(THEMES).map(([k, t]) => `<button type="button" class="theme-tile" data-act="setTheme" data-v="${k}" aria-pressed="${(p.theme || "floor") === k}"><div class="sw" style="background:${t.sw[0]}"><i style="background:${t.sw[1]}"></i><i style="background:${t.sw[2]}"></i></div><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
@@ -1280,10 +1304,9 @@ function saveExercise(c) {
   const s = sessionFor(c.u, c.date);
   const prev = S.personalBest(state.data.sessions.filter(x => x.date < c.date), c.u, c.id, v);
   const isPR = prev && S.betterThan(def.kind, S.bestScore(def.kind, sets), prev.score);
-  const exercises = (s?.exercises || []).filter(e => e.id !== c.id);
   const planOrder = todaysList(c.u, c.date).map(x => x.ex.id);
-  exercises.push(entry); exercises.sort((a, b) => planOrder.indexOf(a.id) - planOrder.indexOf(b.id));
-  writeSession(c.u, c.date, { exercises, ...(!s?.startedAt && c.date === TODAY() ? { startedAt: Date.now() } : {}) });
+  entry.order = planOrder.indexOf(c.id) >= 0 ? planOrder.indexOf(c.id) : 100 + planOrder.length;
+  writeSession(c.u, c.date, { ex: { [c.id]: entry }, ...(!s?.startedAt && c.date === TODAY() ? { startedAt: Date.now() } : {}) });
   store.del(dKey(c.u, c.date, c.id));
   store.set(xKey(c.u, c.date), getExtras(c.u, c.date).filter(x => x.id !== c.id));
   state.editing.delete(editKey(c.u, c.date, c.id));
@@ -1294,8 +1317,8 @@ function saveExercise(c) {
 function saveCardio(skip) {
   const u = LU(), date = LD(); const form = $("#cardio-form");
   const val = k => form.querySelector(`[data-cf="${k}"]`);
-  const c = skip ? { skipped: "commute", done: false } : {
-    done: true, type: val("type").value, minutes: +val("minutes").value || 0,
+  const c = skip ? { skipped: "commute", done: false, type: "", minutes: 0, miles: null, avgHr: null, hiit: false } : {
+    done: true, skipped: null, type: val("type").value, minutes: +val("minutes").value || 0,
     miles: val("miles").value === "" ? null : +val("miles").value, avgHr: val("avgHr").value === "" ? null : +val("avgHr").value, hiit: val("hiit").checked
   };
   writeSession(u, date, { cardio: c });
@@ -1388,12 +1411,17 @@ document.addEventListener("click", e => {
     case "authReset": { const em = $("#au-email")?.value.trim(); if (!em) { state.auth.error = "Type your email above first, then tap Forgot password."; render(); break; }
       busy(async () => { await resetPassword(em); state.auth.notice = `Password reset email sent to ${em}. Check your spam folder too.`; }); break; }
     case "authResetMe": resetPassword(state.auth.user.email).then(() => toast("Password reset email sent."), e => toast(e.message)); break;
-    case "authSignOut": signOutNow(); store.del("twp-user"); state.user = null; closeOverlay(); break;
+    case "authSignOut": {
+      Object.keys(localStorage).filter(k => k.startsWith("twp-")).forEach(k => store.del(k));
+      closeOverlay(); stopAll(); state.user = null;
+      signOutAndClear().finally(() => location.reload()); break;
+    }
     case "crewJoin": { const code = $("#crew-code").value; const u = state.auth.user; busy(async () => { const id = await joinCrew(code, { uid: u.uid, name: u.name || u.email.split("@")[0], email: u.email }); startCrew(id); }); break; }
     case "crewCreate": { const name = $("#crew-name").value.trim() || "Our crew"; const u = state.auth.user; busy(async () => { const r = await createCrew(name, { uid: u.uid, name: u.name || u.email.split("@")[0], email: u.email, profileId: state.user || "" }); startCrew(r.id); }); break; }
     case "copyCode": { const c = state.auth.crew?.code || ""; navigator.clipboard?.writeText(c).then(() => toast("Invite code copied."), () => toast(c)); break; }
     case "newCode": newInviteCode(state.auth.crewId, state.auth.crew?.code).then(c => { toast(`New code: ${c}. The old one no longer works.`); openSettings(); }, e => toast(e.message)); break;
     case "crewRemove": { const uid = el.dataset.v; if (state.confirmDel !== uid) { state.confirmDel = uid; openSettings(); break; } state.confirmDel = null; removeMember(state.auth.crewId, uid).then(() => { toast("Removed from the crew."); openSettings(); }, e => toast(e.message)); break; }
+    case "legacyQuick": readLegacy().then(r => r.count ? importAll(r.data).then(n => toast(`Copied ${n} items into the crew.`)) : toast("No old data found. Is the TEMPORARY rule still published?"), e => toast(e.message)); break;
     case "legacyCheck": readLegacy().then(r => { state.auth.legacy = r; if (!r.count) toast("No old data found (or the temporary rule isn't published)."); openSettings(); }); break;
     case "legacyCopy": { const r = state.auth.legacy; importAll(r.data).then(n => { toast(`Copied ${n} items into the crew.`); state.auth.legacy = null; openSettings(); }, e => toast(e.message)); break; }
     case "linkGoogle": addGoogle().then(() => { state.auth.user = currentInfo(); toast("Google sign-in added."); openSettings(); }, e => toast(e.message)); break;
@@ -1430,7 +1458,9 @@ document.addEventListener("click", e => {
       const c = cardFor(el); const k = editKey(c.u, c.date, c.id);
       if (state.confirmDel !== k) { state.confirmDel = k; render(); break; }
       state.confirmDel = null; const s = sessionFor(c.u, c.date);
-      writeSession(c.u, c.date, { exercises: (s?.exercises || []).filter(x => x.id !== c.id) });
+      if (s?.ex?.[c.id]) dropField("sessions", s.id, ["ex", c.id]);
+      const raw = state.raw.sessions?.find(x => x.id === s?.id);
+      if (raw?.exercises?.some(x => x.id === c.id)) patch("sessions", s.id, { exercises: raw.exercises.filter(x => x.id !== c.id) });
       store.del(dKey(c.u, c.date, c.id)); state.editing.delete(k); toast("Removed."); render(); break;
     }
     case "dropExtra": { const c = cardFor(el); store.set(xKey(c.u, c.date), getExtras(c.u, c.date).filter(x => x.id !== c.id)); store.del(dKey(c.u, c.date, c.id)); render(); break; }
@@ -1601,7 +1631,8 @@ addEventListener("online", updateSync); addEventListener("offline", updateSync);
 
 let renderQueued = false;
 function onData(name, docs, fromCache, pending) {
-  state.data[name] = docs; state.flags[name] = { fromCache, pending };
+  state.raw[name] = docs;
+  state.data[name] = name === "sessions" ? docs.map(normalizeSession) : docs; state.flags[name] = { fromCache, pending };
   if ((name === "settings" || name === "sessions") && !state.userTouchedSel) state.sel = null;
   if (name === "sessions") consolidate();
   if (name === "pings") handlePings();
@@ -1618,13 +1649,20 @@ let stopData = null, stopCrew = null;
 const me = () => state.auth.members.find(m => m.uid === state.auth.user?.uid);
 const isOwner = () => state.auth.crew?.owner === state.auth.user?.uid;
 
-function resetData() { for (const k of Object.keys(state.data)) state.data[k] = []; state.flags = {}; profMemo = { src: null, map: {} }; libMemo = { src: null, list: [] }; }
+function resetData() { for (const k of Object.keys(state.data)) state.data[k] = []; state.raw = {}; state.flags = {}; profMemo = { src: null, map: {} }; libMemo = { src: null, list: [] }; }
 function startCrew(id) {
   if (state.auth.crewId === id && stopData) return;
   stopData?.(); stopCrew?.(); resetData();
   state.auth.crewId = id; store.set(`twp-crew-${state.auth.user.uid}`, id);
   stopData = connect(id, onData, onStatus);
-  stopCrew = watchCrew(id, crew => { state.auth.crew = crew; render(); }, members => {
+  stopCrew = watchCrew(id, crew => {
+    if (!crew) {
+      // Removed from the crew, or the crew is gone: go back to the join screen.
+      stopAll(); store.del(`twp-crew-${state.auth.user.uid}`); setUserDoc(state.auth.user.uid, { crewId: null }).catch(() => {});
+      state.auth.error = "You're no longer in that crew. Join another with an invite code, or start your own."; render(); return;
+    }
+    state.auth.crew = crew; render();
+  }, members => {
     state.auth.members = members;
     const m = members.find(x => x.uid === state.auth.user?.uid);
     if (m?.profileId && !state.user) { state.user = m.profileId; state.viewUser = m.profileId; store.set("twp-user", m.profileId); }

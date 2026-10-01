@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, writeBatch, updateDoc
+  collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, writeBatch, updateDoc, deleteField, FieldPath, terminate, clearIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -85,7 +85,10 @@ export async function joinCrew(code, me) {
   return id;
 }
 export function watchCrew(id, onCrew, onMembers) {
-  const a = onSnapshot(doc(db, "crews", id), s => onCrew(s.exists() ? { id, ...s.data() } : null), () => onCrew(null));
+  // Only report "no crew" when the server says so; an empty offline cache isn't proof.
+  const a = onSnapshot(doc(db, "crews", id), { includeMetadataChanges: true }, s => {
+    if (s.exists()) onCrew({ id, ...s.data() }); else if (!s.metadata.fromCache) onCrew(null);
+  }, err => { if (String(err.code).includes("permission-denied")) onCrew(null); });
   const b = onSnapshot(collection(db, "crews", id, "members"), s => onMembers(s.docs.map(d => ({ uid: d.id, ...d.data() }))), () => {});
   return () => { a(); b(); };
 }
@@ -115,6 +118,19 @@ export function save(name, id, data) {
   return id;
 }
 export function remove(name, id) { deleteDoc(ref(name, id)).catch(err => console.error("Delete failed", err)); }
+// Merge only the given fields, so two phones changing different parts of the same record don't overwrite each other.
+export function patch(name, id, data) {
+  setDoc(ref(name, id), { ...data, updatedAt: Date.now() }, { merge: true }).catch(err => console.error("Save failed", err));
+  return id;
+}
+export function dropField(name, id, path) {
+  updateDoc(ref(name, id), new FieldPath(...path), deleteField(), "updatedAt", Date.now()).catch(err => console.error("Delete failed", err));
+}
+// Sign out and wipe this phone's cached copy of the crew's data.
+export async function signOutAndClear() {
+  await signOut(auth);
+  try { await terminate(db); await clearIndexedDbPersistence(db); } catch (err) { console.warn("Cache clear", err); }
+}
 export async function importAll(data) {
   let batch = writeBatch(db), n = 0;
   for (const name of COLLECTIONS) for (const item of data[name] || []) {

@@ -51,6 +51,8 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | `firestore.rules` | Security rules to paste into Firebase. |
 | `css/styles.css` | Look and feel. |
 | `sw.js` | Offline support. |
+| `tests/run.mjs` | Tests for the progress math and content. Run `node tests/run.mjs`. |
+| `AUDIT.md` | Latest audit: what was checked and fixed. |
 
 ### Changing the plan
 Edit `js/plan.js` on GitHub. Keep each exercise's `id` the same, since logged history is matched by id. After any change, open `sw.js` and bump `VERSION` (for example `twp-v1` → `twp-v2`) so installed phones pick up the update.

@@ -3,14 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
     function member(crewId) { return signedIn() && exists(/databases/$(database)/documents/crews/$(crewId)/members/$(request.auth.uid)); }
-    function crewOwner(crewId) { return get(/databases/$(database)/documents/crews/$(crewId)).data.owner == request.auth.uid; }
+    function crewOwner(crewId) { return signedIn() && get(/databases/$(database)/documents/crews/$(crewId)).data.owner == request.auth.uid; }
 
-    // Each person's pointer to their crew.
+    // Each person's pointer to their crew. Only they can see or change it.
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
-    // Invite codes: anyone signed in can look up a code they were given; only crew members can make or retire codes.
+    // Invite codes. Anyone signed in can look up a code they were given (but not list codes).
+    // Only members can create or retire their own crew's codes. Existing codes can't be overwritten.
     match /codes/{code} {
       allow get: if signedIn();
       allow create: if member(request.resource.data.crewId);
@@ -18,27 +19,35 @@ service cloud.firestore {
     }
 
     match /crews/{crewId} {
+      // Creating a crew makes you its owner. Members can rename it or change the code,
+      // but nobody can hand ownership to someone else or delete the crew from the app.
       allow create: if signedIn() && request.resource.data.owner == request.auth.uid;
-      allow read, update: if member(crewId);
+      allow read: if member(crewId);
+      allow update: if member(crewId) && request.resource.data.owner == resource.data.owner;
 
       match /members/{uid} {
         allow read: if member(crewId);
-        // Join yourself, either as the owner or with a valid invite code for this crew.
+        // Join yourself: as the owner, or as a regular member holding a valid invite code for this crew.
         allow create: if signedIn() && request.auth.uid == uid && (
-          crewOwner(crewId) ||
-          get(/databases/$(database)/documents/codes/$(request.resource.data.code)).data.crewId == crewId);
-        allow update: if member(crewId);
-        allow delete: if member(crewId) && (request.auth.uid == uid || crewOwner(crewId));
+          (crewOwner(crewId) && request.resource.data.role == 'owner') ||
+          (request.resource.data.role == 'member' &&
+           get(/databases/$(database)/documents/codes/$(request.resource.data.code)).data.crewId == crewId));
+        // You can update your own entry (name, chosen profile) but not your role. The owner can update anyone.
+        allow update: if crewOwner(crewId) ||
+          (signedIn() && request.auth.uid == uid && request.resource.data.role == resource.data.role);
+        // Leave the crew yourself, or be removed by the owner.
+        allow delete: if signedIn() && (request.auth.uid == uid || crewOwner(crewId));
       }
 
-      // Workouts, body entries, library, profiles, settings, high-fives.
+      // Workouts, body entries, library, profiles, settings, high-fives: any member can read and write.
       match /{coll}/{docId} {
-        allow read, write: if member(crewId) && coll != "members";
+        allow read, write: if coll != 'members' && member(crewId);
       }
     }
 
     // TEMPORARY: lets the crew owner copy data saved by the first version into the crew.
-    // Delete this block once you've used "Bring over data from the first version".
+    // DELETE THIS BLOCK as soon as you've used "Bring over data from the first version":
+    // while it's here, anyone with an account can read the old data.
     match /{coll}/{docId} {
       allow read: if signedIn() && coll in ['sessions', 'body', 'activities', 'settings', 'library', 'profiles', 'pings'];
     }
