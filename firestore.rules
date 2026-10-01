@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function member(crewId) { return signedIn() && exists(/databases/$(database)/documents/crews/$(crewId)/members/$(request.auth.uid)); }
+    function crewOwner(crewId) { return get(/databases/$(database)/documents/crews/$(crewId)).data.owner == request.auth.uid; }
+
+    // Each person's pointer to their crew.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Invite codes: anyone signed in can look up a code they were given; only crew members can make or retire codes.
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow create: if member(request.resource.data.crewId);
+      allow delete: if member(resource.data.crewId);
+    }
+
+    match /crews/{crewId} {
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid;
+      allow read, update: if member(crewId);
+
+      match /members/{uid} {
+        allow read: if member(crewId);
+        // Join yourself, either as the owner or with a valid invite code for this crew.
+        allow create: if signedIn() && request.auth.uid == uid && (
+          crewOwner(crewId) ||
+          get(/databases/$(database)/documents/codes/$(request.resource.data.code)).data.crewId == crewId);
+        allow update: if member(crewId);
+        allow delete: if member(crewId) && (request.auth.uid == uid || crewOwner(crewId));
+      }
+
+      // Workouts, body entries, library, profiles, settings, high-fives.
+      match /{coll}/{docId} {
+        allow read, write: if member(crewId) && coll != "members";
+      }
+    }
+
+    // TEMPORARY: lets the crew owner copy data saved by the first version into the crew.
+    // Delete this block once you've used "Bring over data from the first version".
+    match /{coll}/{docId} {
+      allow read: if signedIn() && coll in ['sessions', 'body', 'activities', 'settings', 'library', 'profiles', 'pings'];
+    }
+  }
+}

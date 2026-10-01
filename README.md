@@ -47,29 +47,27 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | `js/fun.js` | Voice lines, celebrations, badges, streaks, points. |
 | `js/stats.js` | Progress math: best sets, weight-bump rules, reports. |
 | `js/app.js` | Screens and buttons. |
-| `js/firebase.js` | Database connection and Firebase config. |
+| `js/firebase.js` | Sign-in, crews, database connection and Firebase config. |
+| `firestore.rules` | Security rules to paste into Firebase. |
 | `css/styles.css` | Look and feel. |
 | `sw.js` | Offline support. |
 
 ### Changing the plan
 Edit `js/plan.js` on GitHub. Keep each exercise's `id` the same, since logged history is matched by id. After any change, open `sw.js` and bump `VERSION` (for example `twp-v1` → `twp-v2`) so installed phones pick up the update.
 
-## Setup (already done once)
-1. Firebase project with Firestore and Anonymous sign-in turned on.
-2. Firestore rules allow reads and writes only for signed-in users:
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /{document=**} {
-         allow read, write: if request.auth != null;
-       }
-     }
-   }
-   ```
-3. GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` / root**.
+## Setup
+1. **Firebase → Authentication → Sign-in method:** turn on **Google** and **Email/Password**. (Anonymous can be turned off.)
+2. **Firebase → Authentication → Settings → Authorized domains:** add `fitness-for-faggy-bunnies.github.io`.
+3. **Firestore → Rules:** paste the contents of `firestore.rules` and publish.
+4. **GitHub Pages:** repo Settings → Pages → Deploy from a branch → `main` / root.
 
-The Firebase config in `js/firebase.js` is meant to be public. Access is controlled by the rules above.
+### Crews and sign-in
+- Sign in with Google, or with email + password. Forgot password sends a reset email. Settings → Account can add the other sign-in method to the same account.
+- A crew is a private group with its own workouts, library and profiles. The first person creates it; others join with the 6-letter invite code from Settings → Crew.
+- Settings → Crew lists each member's sign-in email, for anyone who forgets which one they used.
+- Moving the first version's data: the crew owner opens Settings → Crew → "Bring over data from the first version" once, then deletes the TEMPORARY block from the rules.
+
+The Firebase config in `js/firebase.js` is meant to be public. Access is controlled by the rules.
 
 ## Installing on a phone
 - **iPhone:** open the site in Safari → Share → Add to Home Screen.

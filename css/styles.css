@@ -80,7 +80,7 @@ nav.tabs button[aria-current="page"] span{transform:translateY(-1px)}
 .last{font-size:.9rem;color:var(--muted)}
 .last b{color:var(--ink);font-weight:600}
 label.field{display:grid;gap:4px;font-size:.88rem;color:var(--muted);min-width:0}
-input[type=number],input[type=date],input[type=text],select,textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:40px;width:100%;color:var(--ink)}
+input[type=number],input[type=date],input[type=text],input[type=email],input[type=password],select,textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:40px;width:100%;color:var(--ink)}
 textarea{min-height:72px;resize:vertical}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 14px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:50;font-weight:600;max-width:calc(100% - 32px)}
@@ -334,3 +334,8 @@ body[data-skin="clean"] h1,body[data-skin="clean"] .h2,body[data-skin="clean"] .
 .reminders{display:grid;gap:6px;background:var(--warn-soft);border-radius:var(--radius);padding:10px 12px}
 .reminders .rem{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:.9rem}
 .reminders .rem .row{flex-wrap:nowrap}
+.signin{max-width:440px;width:100%;margin:0 auto;padding-top:4vh;text-align:center;display:grid;gap:14px}
+.signin h2{font-size:2.2rem;text-transform:uppercase}
+.btn.google{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#1f1f1f;border-color:#dadce0;font-weight:700;min-height:48px}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}
+.or::before,.or::after{content:"";flex:1;border-top:1px solid var(--line)}

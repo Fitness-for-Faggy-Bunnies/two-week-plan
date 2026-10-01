@@ -4,7 +4,8 @@ import * as F from "./fun.js";
 import { safetyFor } from "./safety.js";
 import * as S from "./stats.js";
 import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
-import { connect, save, remove, importAll, COLLECTIONS } from "./firebase.js";
+import { connect, save, remove, importAll, COLLECTIONS, watchAuth, signInGoogle, signInEmail, createEmailAccount, resetPassword, signOutNow, addGoogle, addPassword, currentInfo,
+  getUserDoc, createCrew, joinCrew, watchCrew, updateMember, removeMember, renameCrew, newInviteCode, readLegacy } from "./firebase.js";
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, r = document) => r.querySelector(s);
@@ -199,6 +200,11 @@ function todaysList(u, date) {
 function render() {
   const main = $("#main");
   destroyCharts();
+  if (!state.auth?.ready || !state.auth.user || !state.auth.crewId) {
+    applyAppearance(); $("#tabs").classList.add("hidden"); $("#who").classList.add("hidden"); $("#gear").classList.add("hidden"); $("#sync").classList.add("hidden");
+    main.innerHTML = !state.auth?.ready ? `<p class="muted">Loading…</p>` : !state.auth.user ? viewSignIn() : viewCrewSetup();
+    return;
+  }
   if (state.user && state.flags.profiles && !profileIds().includes(state.user)) state.user = null;
   applyAppearance();
   if (!state.user) {
@@ -210,7 +216,7 @@ function render() {
     return;
   }
   if (!state.partner) state.logUser = state.user;
-  $("#tabs").classList.remove("hidden");
+  $("#tabs").classList.remove("hidden"); $("#gear").classList.remove("hidden"); $("#sync").classList.remove("hidden");
   const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user) + esc(P(state.user).name) + (state.partner ? " + " + esc(P(other(state.user)).name) : "");
   document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   if (!state.sel) {
@@ -908,6 +914,7 @@ function openSettings() {
   const one = (act, cur, opts) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}">${esc(l)}</button>`).join("")}</div>`;
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Settings"><div class="inner">
     <div class="between"><h2 class="h2">Settings</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
+    ${crewSettings()}
     <section class="card"><h3 class="h3">Who's using this phone</h3>${personToggle("pickUser", u)}
       <div class="row"><button class="btn small" data-act="editProfile">Edit ${esc(p.name)}'s profile</button><button class="btn small" data-act="newProfile">+ New person</button></div>
       <label class="check"><input type="checkbox" data-act="partner" ${state.partner ? "checked" : ""}><span>Partner mode: log for a partner from this phone</span></label>
@@ -1376,7 +1383,23 @@ document.addEventListener("click", e => {
       editPlan([LU()], [week], day, d => { Object.assign(d, { add: [], remove: [], order: [], sr: {}, title: "" }); }); toast("Back to the original plan for this day."); break;
     }
     case "planCopy": { const { week, day } = state.sel; const src = dayEdits(LU(), week, day); const to = other(LU()); editPlan([to], [week], day, d => { Object.assign(d, JSON.parse(JSON.stringify(src))); }); toast(`Copied to ${P(to).name}'s plan.`); break; }
-    case "pickUser": state.user = el.dataset.u; state.viewUser = state.user; state.logUser = state.user; state.sel = null; store.set("twp-user", state.user); if (state.overlay) closeOverlay(); render(); break;
+    case "authGoogle": busy(() => signInGoogle()); break;
+    case "authMode": state.auth.mode = state.auth.mode === "create" ? "signin" : "create"; state.auth.error = ""; render(); break;
+    case "authReset": { const em = $("#au-email")?.value.trim(); if (!em) { state.auth.error = "Type your email above first, then tap Forgot password."; render(); break; }
+      busy(async () => { await resetPassword(em); state.auth.notice = `Password reset email sent to ${em}. Check your spam folder too.`; }); break; }
+    case "authResetMe": resetPassword(state.auth.user.email).then(() => toast("Password reset email sent."), e => toast(e.message)); break;
+    case "authSignOut": signOutNow(); store.del("twp-user"); state.user = null; closeOverlay(); break;
+    case "crewJoin": { const code = $("#crew-code").value; const u = state.auth.user; busy(async () => { const id = await joinCrew(code, { uid: u.uid, name: u.name || u.email.split("@")[0], email: u.email }); startCrew(id); }); break; }
+    case "crewCreate": { const name = $("#crew-name").value.trim() || "Our crew"; const u = state.auth.user; busy(async () => { const r = await createCrew(name, { uid: u.uid, name: u.name || u.email.split("@")[0], email: u.email, profileId: state.user || "" }); startCrew(r.id); }); break; }
+    case "copyCode": { const c = state.auth.crew?.code || ""; navigator.clipboard?.writeText(c).then(() => toast("Invite code copied."), () => toast(c)); break; }
+    case "newCode": newInviteCode(state.auth.crewId, state.auth.crew?.code).then(c => { toast(`New code: ${c}. The old one no longer works.`); openSettings(); }, e => toast(e.message)); break;
+    case "crewRemove": { const uid = el.dataset.v; if (state.confirmDel !== uid) { state.confirmDel = uid; openSettings(); break; } state.confirmDel = null; removeMember(state.auth.crewId, uid).then(() => { toast("Removed from the crew."); openSettings(); }, e => toast(e.message)); break; }
+    case "legacyCheck": readLegacy().then(r => { state.auth.legacy = r; if (!r.count) toast("No old data found (or the temporary rule isn't published)."); openSettings(); }); break;
+    case "legacyCopy": { const r = state.auth.legacy; importAll(r.data).then(n => { toast(`Copied ${n} items into the crew.`); state.auth.legacy = null; openSettings(); }, e => toast(e.message)); break; }
+    case "linkGoogle": addGoogle().then(() => { state.auth.user = currentInfo(); toast("Google sign-in added."); openSettings(); }, e => toast(e.message)); break;
+    case "linkPassword": { const pw = $("#link-pw").value; if (pw.length < 6) { toast("Use at least 6 characters."); break; } addPassword(pw).then(() => { state.auth.user = currentInfo(); toast("Password added."); openSettings(); }, e => toast(e.message)); break; }
+    case "pickUser": if (state.auth.crewId && state.auth.user && (!me()?.profileId || me()?.profileId !== el.dataset.u) && !state.partner) updateMember(state.auth.crewId, state.auth.user.uid, { profileId: el.dataset.u }).catch(() => {});
+      state.user = el.dataset.u; state.viewUser = state.user; state.logUser = state.user; state.sel = null; store.set("twp-user", state.user); if (state.overlay) closeOverlay(); render(); break;
     case "logUser": state.logUser = el.dataset.u; render(); break;
     case "selWeek": state.sel.week = v; state.userTouchedSel = true; render(); break;
     case "selDay": state.sel.day = v; state.userTouchedSel = true; render(); break;
@@ -1535,12 +1558,20 @@ document.addEventListener("input", e => {
     const q = $("#picker-q"); q.focus(); q.setSelectionRange(pos, pos);
   }
 });
+document.addEventListener("submit", e => {
+  if (e.target.id !== "email-form") return;
+  e.preventDefault();
+  const email = $("#au-email").value, pw = $("#au-pw").value; state.auth.email = email;
+  if (state.auth.mode === "create") busy(() => createEmailAccount(email, pw, $("#au-name")?.value.trim()));
+  else busy(() => signInEmail(email, pw));
+});
 document.addEventListener("change", e => {
   const el = e.target; const act = el.dataset.act;
   if (act === "progEx") { state.progEx = el.value; render(); }
   if (act === "setAccent") { saveProfile(state.user, { accent: el.value }); setTimeout(() => { applyAppearance(); render(); }, 60); }
   if (act === "setSound") saveProfile(state.user, { sound: el.checked });
   if (el.dataset.gym) { const g = { ...gymSet() }; delete g.id; delete g.updatedAt; g[el.dataset.gym] = el.value === "" ? "" : +el.value; save("settings", "gym", g); }
+  if (act === "crewRename" && el.value.trim()) renameCrew(state.auth.crewId, el.value.trim()).then(() => toast("Crew renamed."));
   if (act === "planTitle") { const { week, day } = state.sel; editPlan([LU()], [week], day, d => { d.title = el.value.trim(); }); }
   if (act === "planSr") { const c = cardFor(el); const { week, day } = state.sel; editPlan([c.u], [week], day, d => { d.sr[c.id] = el.value.trim(); }); store.del(dKey(c.u, c.date, c.id)); }
   if (act === "libSel") { state.libF[el.dataset.k] = el.value; store.set("twp-libf", state.libF); render(); }
@@ -1569,16 +1600,113 @@ function updateSync() {
 addEventListener("online", updateSync); addEventListener("offline", updateSync);
 
 let renderQueued = false;
-connect((name, docs, fromCache, pending) => {
+function onData(name, docs, fromCache, pending) {
   state.data[name] = docs; state.flags[name] = { fromCache, pending };
   if ((name === "settings" || name === "sessions") && !state.userTouchedSel) state.sel = null;
   if (name === "sessions") consolidate();
   if (name === "pings") handlePings();
   if (["sessions", "body", "activities"].includes(name)) checkAchievements();
   updateSync();
-  const busy = state.overlay || document.activeElement?.matches?.("input, textarea, select");
-  if (!busy && !renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
-}, status => { state.error = status.state === "error" ? status.message : null; updateSync(); if (state.error) render(); });
+  const busyNow = state.overlay || document.activeElement?.matches?.("input, textarea, select");
+  if (!busyNow && !renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
+}
+function onStatus(status) { state.error = status.state === "error" ? status.message : null; updateSync(); if (state.error) render(); }
+
+// ---------------------------------------------------------------- sign-in & crews
+state.auth = { ready: false, user: null, crewId: null, crew: null, members: [], error: "", busy: false, mode: "signin", legacy: null };
+let stopData = null, stopCrew = null;
+const me = () => state.auth.members.find(m => m.uid === state.auth.user?.uid);
+const isOwner = () => state.auth.crew?.owner === state.auth.user?.uid;
+
+function resetData() { for (const k of Object.keys(state.data)) state.data[k] = []; state.flags = {}; profMemo = { src: null, map: {} }; libMemo = { src: null, list: [] }; }
+function startCrew(id) {
+  if (state.auth.crewId === id && stopData) return;
+  stopData?.(); stopCrew?.(); resetData();
+  state.auth.crewId = id; store.set(`twp-crew-${state.auth.user.uid}`, id);
+  stopData = connect(id, onData, onStatus);
+  stopCrew = watchCrew(id, crew => { state.auth.crew = crew; render(); }, members => {
+    state.auth.members = members;
+    const m = members.find(x => x.uid === state.auth.user?.uid);
+    if (m?.profileId && !state.user) { state.user = m.profileId; state.viewUser = m.profileId; store.set("twp-user", m.profileId); }
+    render();
+  });
+}
+function stopAll() { stopData?.(); stopCrew?.(); stopData = stopCrew = null; resetData(); Object.assign(state.auth, { crewId: null, crew: null, members: [] }); }
+
+watchAuth(async (u, err) => {
+  if (err) state.auth.error = err;
+  state.auth.user = u;
+  if (!u) { stopAll(); state.auth.ready = true; render(); return; }
+  let crewId = store.get(`twp-crew-${u.uid}`, null);
+  try { const d = await getUserDoc(u.uid); if (d?.crewId) crewId = d.crewId; } catch (e) { state.auth.error = e.message; }
+  if (crewId) startCrew(crewId);
+  state.auth.ready = true; render();
+});
+
+async function busy(fn) {
+  state.auth.busy = true; state.auth.error = ""; render();
+  try { await fn(); } catch (e) { state.auth.error = e.message || String(e); }
+  state.auth.busy = false; render();
+}
+
+function viewSignIn() {
+  const a = state.auth; const create = a.mode === "create";
+  return `<section class="signin">
+    <h2>Two-Week Split</h2>
+    <p class="muted">Sign in to see your crew's workouts on any phone.</p>
+    ${a.error ? `<div class="banner" role="alert">${esc(a.error)}</div>` : ""}
+    ${a.notice ? `<div class="reminders">${esc(a.notice)}</div>` : ""}
+    <button class="btn block google" data-act="authGoogle" ${a.busy ? "disabled" : ""}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h6c-.3 1.4-1.1 2.5-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.8C3.8 20.5 7.6 23 12 23z"/><path fill="#FBBC05" d="M5.7 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7.1H2C1.4 8.6 1 10.3 1 12s.4 3.4 1 4.9l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2C17.5 2.1 15 1 12 1 7.6 1 3.8 3.5 2 7.1l3.7 2.8C6.6 7.3 9.1 5.4 12 5.4z"/></svg>Continue with Google</button>
+    <div class="or"><span>or use email</span></div>
+    <form class="card" id="email-form" style="text-align:left">
+      ${create ? `<label class="field">Your name<input type="text" id="au-name" autocomplete="name"></label>` : ""}
+      <label class="field">Email<input type="email" id="au-email" autocomplete="email" value="${esc(a.email || "")}"></label>
+      <label class="field">Password<input type="password" id="au-pw" autocomplete="${create ? "new-password" : "current-password"}" minlength="6"></label>
+      <button class="btn primary block" type="submit" ${a.busy ? "disabled" : ""}>${create ? "Create account" : "Sign in"}</button>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn small" type="button" data-act="authMode">${create ? "I already have an account" : "Create an account"}</button>
+        ${create ? "" : `<button class="btn small" type="button" data-act="authReset">Forgot password?</button>`}
+      </div>
+    </form>
+    <details class="more" style="text-align:left"><summary>Forgot which email you used?</summary><div class="panel small">
+      <p>Try Continue with Google first. If that's not it, ask someone in your crew: Settings → Crew lists everyone's sign-in email.</p></div></details>
+  </section>`;
+}
+function viewCrewSetup() {
+  const a = state.auth;
+  return `<section class="signin">
+    <h2>Join your crew</h2>
+    <p class="muted">Signed in as ${esc(a.user.email)}. A crew is a private group of training partners who share a gym library and can see each other's progress.</p>
+    ${a.error ? `<div class="banner" role="alert">${esc(a.error)}</div>` : ""}
+    <section class="card" style="text-align:left"><h3 class="h3">Have an invite code?</h3>
+      <label class="field">Invite code<input type="text" id="crew-code" autocapitalize="characters" maxlength="6" placeholder="ABC123" style="font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase"></label>
+      <button class="btn primary block" data-act="crewJoin" ${a.busy ? "disabled" : ""}>Join crew</button></section>
+    <section class="card" style="text-align:left"><h3 class="h3">Start a new crew</h3>
+      <label class="field">Crew name<input type="text" id="crew-name" placeholder="Fitness for Faggy Bunnies"></label>
+      <button class="btn block" data-act="crewCreate" ${a.busy ? "disabled" : ""}>Create crew</button></section>
+    <button class="btn small" data-act="authSignOut">Sign out</button>
+  </section>`;
+}
+function crewSettings() {
+  const a = state.auth; const owner = isOwner();
+  return `<section class="card"><h3 class="h3">Crew</h3>
+    ${owner ? `<label class="field">Crew name<input type="text" data-act="crewRename" value="${esc(a.crew?.name || "")}"></label>` : `<p><b>${esc(a.crew?.name || "")}</b></p>`}
+    <div class="field"><span>Invite code (share it with new members)</span>
+      <div class="row"><b class="mono" style="font-size:1.5rem;letter-spacing:.2em" id="invite-code">${esc(a.crew?.code || "")}</b><button class="btn small" data-act="copyCode">Copy</button>${owner ? `<button class="btn small" data-act="newCode">New code</button>` : ""}</div></div>
+    <div class="field"><span>Members and their sign-in emails</span>
+      ${a.members.map(m => `<div class="list-item"><div>${m.profileId ? avatarHtml(m.profileId) : ""}<b>${esc(m.name || "Member")}</b>${m.role === "owner" ? ` <span class="tag orig">Owner</span>` : ""}<div class="small muted">${esc(m.email)}${m.profileId ? ` · profile: ${esc(P(m.profileId).name)}` : " · no profile picked yet"}</div></div>
+        ${owner && m.uid !== a.user.uid ? `<button class="btn small danger" data-act="crewRemove" data-v="${esc(m.uid)}">${state.confirmDel === m.uid ? "Confirm" : "Remove"}</button>` : ""}</div>`).join("")}</div>
+    ${owner ? `<details class="more" ${a.legacy ? "open" : ""}><summary>Bring over data from the first version</summary><div class="panel small">
+      <p>Copies the workouts, body entries, library, profiles and settings saved before crews existed into this crew. Run it once.</p>
+      ${a.legacy ? `<p><b>${a.legacy.count}</b> items found.</p><button class="btn primary" data-act="legacyCopy">Copy ${a.legacy.count} item${a.legacy.count === 1 ? "" : "s"} into this crew</button>` : `<button class="btn" data-act="legacyCheck">Look for old data</button>`}</div></details>` : ""}
+  </section>
+  <section class="card"><h3 class="h3">Account</h3>
+    <p class="small">Signed in as <b>${esc(a.user.email)}</b> with ${a.user.providers.map(p => p === "google.com" ? "Google" : p === "password" ? "email + password" : p).join(" and ")}.</p>
+    ${a.user.providers.includes("google.com") ? "" : `<button class="btn small" data-act="linkGoogle">Also sign in with Google</button>`}
+    ${a.user.providers.includes("password") ? `<button class="btn small" data-act="authResetMe">Change password (sends an email)</button>` : `<div class="row" style="align-items:end"><label class="field" style="flex:1">Add a password<input type="password" id="link-pw" minlength="6" autocomplete="new-password"></label><button class="btn small" data-act="linkPassword">Add</button></div><p class="small muted">Then you can sign in with ${esc(a.user.email)} and this password if Google sign-in gives you trouble.</p>`}
+    <button class="btn small danger" data-act="authSignOut">Sign out</button>
+  </section>`;
+}
 
 render();
 if ("serviceWorker" in navigator) {
