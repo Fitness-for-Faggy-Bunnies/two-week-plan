@@ -42,7 +42,7 @@ main{max-width:760px;margin:0 auto;padding:16px;display:grid;gap:16px}
 .banner{background:var(--warn-soft);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:.93rem}
 
 /* bottom nav */
-nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs button{border:0;background:none;height:var(--nav-h);display:grid;place-items:center;gap:0;font:600 .78rem var(--body);color:var(--muted);padding:6px 0}
 nav.tabs button span{font-size:1.25rem;line-height:1}
 nav.tabs button[aria-current="page"]{color:var(--accent)}
@@ -183,3 +183,6 @@ pre.summary{white-space:pre-wrap;background:var(--inset);border-radius:10px;padd
 .ex .sets{display:grid}
 .done-card .head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .done-card .head .name{font-weight:700;font-size:1.05rem}
+.focus-chips{display:flex;flex-wrap:wrap;gap:6px}
+.focus-chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font:600 .85rem var(--body);color:var(--muted);min-height:34px}
+.focus-chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}

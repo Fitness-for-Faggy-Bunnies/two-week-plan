@@ -7,13 +7,19 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 **At the gym (Workout tab)**
 - Today's plan for each person, with Standard, Harder and Swap versions of every exercise. Each version has instructions and form videos.
 - Log sets right on the exercise card: weight, reps, and how each set felt (Easy / Right / Hard), pre-filled from last time. Changing set 1 fills the sets after it.
-- **Save exercise** after each one. It checks off and stays filled in for the day; tap Edit to change it.
-- **+ Add an exercise**: anything from the plan, or a machine that isn't in the plan.
+- **Save exercise** after each one. It checks off and stays filled in for the day; tap Log to change it.
+- **+ Add an exercise**: anything from the plan, the gym library, or a new machine.
+- **Library** swap: pick a machine from the gym library that works the same areas as the planned exercise.
 - Cardio (with Mat's bike commute) and the check-in (pain, sleep, energy, soreness, notes) each save on their own.
 - "Last time" numbers and automatic weight-bump prompts.
 - A rest timer that shows the between-set stretches for the exercise, then buzzes and beeps.
 - Partner mode: one phone logs both people.
 - Works offline once installed. Anything logged without signal syncs later.
+
+**Gym library (Gym tab)**
+- The machines at our gym, each tagged with what it works (chest, shoulders, arms, back, core, glutes, legs, calves, cardio), equipment type, and notes.
+- Library swaps only offer machines that share a focus area with the planned exercise.
+- Quick-add the machines already in the plan.
 
 **Progress**
 - A chart and history for every exercise, weekly sets per focus area, cardio, resting heart rate, and pain.

@@ -3,7 +3,8 @@ import { ALL_EX, PROFILES, FOCUS, PAIN_AREAS, variantDef, exDef } from "./plan.j
 
 // Definition for a logged entry (plan exercise or one added by hand).
 export function defFor(id, variant, entry = {}) {
-  return ALL_EX[id] ? variantDef(ALL_EX[id], variant) : { name: entry.name || id, sr: "", kind: entry.kind || "load", db: !!entry.db, q: entry.name || id };
+  if (ALL_EX[id] && !String(variant || "").startsWith("lib:")) return variantDef(ALL_EX[id], variant);
+  return { name: entry.name || id, sr: ALL_EX[id]?.sr || "", kind: entry.kind || "load", db: !!entry.db, q: entry.name || id };
 }
 
 export const STEP = 5; // lb increment for weight-bump suggestions
@@ -104,7 +105,7 @@ export function personalBest(sessions, user, exId, variant, beforeOrOn) {
 
 // Automatic weight-bump prompt: every set at the top of the range, two sessions in a row.
 export function suggestion(sessions, user, exId, variant) {
-  const ex = ALL_EX[exId]; if (!ex) return null;
+  const ex = ALL_EX[exId]; if (!ex || String(variant || "").startsWith("lib:")) return null;
   const def = variantDef(ex, variant === "hard" ? "hard" : "std");
   const { max, min } = parseRange(def.sr);
   const h = exHistory(sessions, user, exId, variant).slice(-2);
@@ -139,9 +140,9 @@ export function setsByFocus(sessions, user, from, to) {
     weeks[wk] = weeks[wk] || {};
     for (const e of s.exercises || []) {
       if (e.skipped) continue;
-      const ex = ALL_EX[e.id]; if (!ex) continue;
+      const focus = ALL_EX[e.id]?.focus || e.focus || [];
       const n = (e.sets || []).filter(x => (x.d || 2) >= 2).length;
-      for (const f of ex.focus) weeks[wk][f] = (weeks[wk][f] || 0) + n;
+      for (const f of focus) weeks[wk][f] = (weeks[wk][f] || 0) + n;
     }
   }
   return weeks;
@@ -283,7 +284,7 @@ export function reportText(r) {
   L.push("EVERY WORKOUT THIS CYCLE (weight × reps per set, felt E/R/H = easy/right/hard):");
   for (const d of r.detail) {
     L.push(`${d.date} — Week ${d.week} ${d.day}:`);
-    for (const e of d.exercises) L.push(`- ${e.name}${e.variant === "hard" ? " (harder)" : e.variant === "swap" ? " (swap)" : e.added ? " (added)" : ""}: ${setsText(e)}`);
+    for (const e of d.exercises) L.push(`- ${e.name}${e.variant === "hard" ? " (harder)" : e.variant === "swap" ? " (swap)" : String(e.variant).startsWith("lib:") ? ` (library swap for ${ALL_EX[e.id]?.n || "planned exercise"})` : e.added ? " (added)" : ""}: ${setsText(e)}`);
     if (d.cardio) L.push(`- Cardio: ${d.cardio.type || "?"}, ${d.cardio.minutes || 0} min${d.cardio.miles ? `, ${d.cardio.miles} mi` : ""}${d.cardio.avgHr ? `, avg HR ${d.cardio.avgHr}` : ""}${d.cardio.hiit ? ", intervals" : ""}`);
     if (d.notes) L.push(`- Notes: ${d.notes}`);
   }

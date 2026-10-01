@@ -1,7 +1,7 @@
 // Two-Week Split — app shell, views and events.
 import { PROFILES, PLAN, STRETCH, CARDIO, DAYS, DAY_NAMES, ALL_EX, FOCUS, PAIN_AREAS, variantDef, defaultVariant, exDef } from "./plan.js";
 import * as S from "./stats.js";
-import { connect, save, remove, importAll } from "./firebase.js";
+import { connect, save, remove, importAll, COLLECTIONS } from "./firebase.js";
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, r = document) => r.querySelector(s);
@@ -17,6 +17,12 @@ const yt = q => "https://www.youtube.com/results?search_query=" + encodeURICompo
 const ytStretch = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " stretch how to");
 const DIFF = ["", "Easy", "Right", "Hard"];
 const VARIANT_LABEL = { std: "Standard", hard: "Harder", swap: "Swap" };
+const vLabel = v => (String(v).startsWith("lib:") ? "Library swap" : VARIANT_LABEL[v] || v);
+const GROUPS = ["chest", "shoulders", "arms", "back", "core", "glutes", "legs", "calves", "cardio"];
+const EQUIP = { machine: "Machine", cable: "Cable", dumbbell: "Dumbbells", barbell: "Barbell / Smith", bodyweight: "Bodyweight", cardio: "Cardio machine", other: "Other" };
+const KIND_LABEL = { load: "Weight × reps", bw: "Reps only", time: "Time (seconds)", carry: "Weight × steps", assist: "Assist weight × reps" };
+const libItem = id => state.data.library.find(x => x.id === id);
+const libForFocus = focus => state.data.library.filter(m => (m.focus || []).some(f => focus.includes(f)));
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 let toastTimer;
@@ -34,7 +40,7 @@ const state = {
   logUser: null, logDate: null, viewUser: null, sel: null, userTouchedSel: false,
   variants: store.get("twp-variants", {}),
   editing: new Set(),
-  data: { sessions: [], body: [], activities: [], settings: [] },
+  data: { sessions: [], body: [], activities: [], settings: [], library: [] }, libFilter: "all", libEdit: null, libSwapFor: null,
   flags: {}, error: null,
   progTab: "lifts", progEx: null, bodyField: "weight",
   repTab: "cycle", repCycle: null, cmpA: null, cmpB: null,
@@ -42,7 +48,7 @@ const state = {
   charts: []
 };
 if (!["mat", "benny"].includes(state.user)) state.user = null;
-if (!["today", "progress", "body", "report"].includes(state.view)) state.view = "today";
+if (!["today", "progress", "body", "report", "gym"].includes(state.view)) state.view = "today";
 Object.keys(localStorage).filter(k => k.startsWith("twp-draft-")).forEach(k => store.del(k)); // old whole-workout drafts
 
 const cycleStart = () => state.data.settings.find(s => s.id === "app")?.cycleStart || "2026-09-28";
@@ -109,7 +115,7 @@ function getDraft(u, date, ex, logged) {
   if (d) return d;
   if (logged) return { variant: logged.variant || "std", sets: logged.sets.map(s => ({ ...s })), fresh: false };
   const v = ex.custom ? "std" : variantOf(u, ex);
-  const def = ex.custom ? ex : variantDef(ex, v);
+  const def = defOf(ex, v);
   const p = prefillSets(u, { sr: def.sr, kind: def.kind }, ex.id, v);
   return { variant: v, ...p };
 }
@@ -153,7 +159,7 @@ function render() {
   }
   if (!state.viewUser) state.viewUser = state.user;
   const banner = state.error ? `<div class="banner" role="alert">${esc(state.error)}</div>` : "";
-  const views = { today: viewToday, progress: viewProgress, body: viewBody, report: viewReport };
+  const views = { today: viewToday, progress: viewProgress, body: viewBody, report: viewReport, gym: viewGym };
   main.innerHTML = banner + views[state.view]();
   afterRender();
 }
@@ -197,23 +203,26 @@ function exerciseCard(u, date, ex, added, s) {
   if (logged && !state.editing.has(ek)) {
     const def = S.defFor(ex.id, logged.variant || "std", logged);
     return `<article class="card ex done-card" id="ex-${ex.id}">
-      <div class="head"><div class="name"><span class="tick" aria-hidden="true">✓</span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${VARIANT_LABEL[logged.variant]}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</div><button class="btn small" data-act="editEx" data-ex="${ex.id}">Edit</button></div>
+      <div class="head"><div class="name"><span class="tick" aria-hidden="true">✓</span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${vLabel(logged.variant)}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</div><button class="btn small" data-act="editEx" data-ex="${ex.id}">Log</button></div>
       <div class="last"><b>${esc(S.setsText(logged))}</b></div>
     </article>`;
   }
   const d = getDraft(u, date, ex, logged);
   const v = d.variant;
-  const def = ex.custom ? { name: ex.n, sr: ex.sr, kind: ex.kind, db: ex.db } : variantDef(ex, v);
+  const lib = String(v).startsWith("lib:") ? libItem(v.slice(4)) : null;
+  const def = defOf(ex, v);
   const opts = [["std", "Standard"]]; if (ex.h) opts.push(["hard", "Harder"]); if (ex.swap) opts.push(["swap", "Swap"]);
-  const why = v === "hard" && ex.h ? ex.h.how : v === "swap" && ex.swap ? ex.swap.how : ex.why;
+  if (!ex.custom) opts.push(["lib", "Library"]);
+  const why = lib ? (lib.notes || `From your gym library. Same target: ${ex.sr}.`) : v === "hard" && ex.h ? ex.h.how : v === "swap" && ex.swap ? ex.swap.how : ex.why;
   const last = S.lastTime(state.data.sessions, u, ex.id, v);
   const sug = ex.custom ? null : S.suggestion(state.data.sessions, u, ex.id, v);
   const pu = other(u), pLast = state.partner ? S.lastTime(state.data.sessions, pu, ex.id, ex.custom ? "std" : variantOf(pu, ex)) : null;
   const entry = { kind: def.kind, db: def.db };
   return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
-    <div class="head"><div class="name">${esc(def.name)}${ex.custom ? "" : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}</div><span class="sr">${esc(def.sr || "")}</span></div>
-    ${opts.length > 1 ? seg("variant", v, opts, "Version") : ""}
+    <div class="head"><div class="name">${esc(def.name)}${ex.custom || lib ? "" : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}</div><span class="sr">${esc(def.sr || "")}</span></div>
+    ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
+    ${lib ? `<div class="row"><a class="video" href="${yt(lib.name)}" target="_blank" rel="noopener">Watch form videos</a><button class="btn small" data-act="libSwap">Change machine</button></div>` : ""}
     ${ex.notes?.[u] ? `<div class="note">${esc(ex.notes[u])}</div>` : ""}
     <div class="last">${last ? `Last time (${S.fmtDate(last.date)}): <b>${esc(S.describeSets(last.kind, last.db, last.sets))}</b>` : "No history yet for this version."}</div>
     ${state.partner ? `<div class="last">${PROFILES[pu].name}: ${pLast ? `<b>${esc(S.describeSets(pLast.kind, pLast.db, pLast.sets))}</b>` : "no history yet"}</div>` : ""}
@@ -261,7 +270,7 @@ function cardioCard(u, date, s) {
   const commute = state.data.activities.find(a => a.id === `${u}-${date}-commute`);
   if ((s?.cardio?.done || s?.cardio?.skipped) && !state.editing.has(ek)) {
     const c = s.cardio;
-    return `<section class="card cardio-card done-card"><div class="head"><div class="name"><span class="tick">✓</span>Cardio</div><button class="btn small" data-act="editCardio">Edit</button></div>
+    return `<section class="card cardio-card done-card"><div class="head"><div class="name"><span class="tick">✓</span>Cardio</div><button class="btn small" data-act="editCardio">Log</button></div>
       <div class="last"><b>${c.skipped ? "Skipped: biked to work" : `${esc(c.type)}, ${c.minutes || 0} min${c.miles ? `, ${c.miles} mi` : ""}${c.avgHr ? `, avg HR ${c.avgHr}` : ""}${c.hiit ? ", intervals" : ""}`}</b>${commute ? ` · Bike commute ${commute.miles} mi` : ""}</div></section>`;
   }
   const c = store.get(`twp-c-${u}-${date}`, null) || { type: s?.cardio?.type || cp.type, minutes: s?.cardio?.minutes ?? 25, miles: s?.cardio?.miles ?? "", avgHr: s?.cardio?.avgHr ?? "", hiit: s?.cardio?.hiit ?? !!cp.hiit, commute: !!commute, commuteMiles: commute?.miles ?? PROFILES[u].commute.miles };
@@ -293,7 +302,7 @@ function checkinCard(u, date, s) {
   if (saved && !state.editing.has(ek)) {
     const pain = PROFILES[u].pain.map(a => `${PAIN_AREAS[a]} ${s.pain?.[a] ?? 0}`).join(" · ");
     const r = s.recovery || {};
-    return `<section class="card done-card"><div class="head"><div class="name"><span class="tick">✓</span>Check-in</div><button class="btn small" data-act="editCheckin">Edit</button></div>
+    return `<section class="card done-card"><div class="head"><div class="name"><span class="tick">✓</span>Check-in</div><button class="btn small" data-act="editCheckin">Log</button></div>
       <div class="last">Pain: ${esc(pain)}</div><div class="last">Sleep ${r.sleep || "–"} · Energy ${r.energy || "–"} · Soreness ${r.soreness || "–"}</div>${s.notes ? `<div class="last">${esc(s.notes)}</div>` : ""}</section>`;
   }
   const k = store.get(`twp-k-${u}-${date}`, null) || { pain: { ...Object.fromEntries(PROFILES[u].pain.map(a => [a, 0])), ...(s?.pain || {}) }, recovery: { sleep: 0, energy: 0, soreness: 0, ...(s?.recovery || {}) }, notes: s?.notes || "" };
@@ -316,6 +325,7 @@ function drawPicker() {
   for (const s of state.data.sessions) for (const e of s.exercises || []) if (e.id.startsWith("custom-")) customs.set(e.id, e);
   const match = n => !q || n.toLowerCase().includes(q);
   const item = (id, name, meta) => `<button class="list-btn" data-act="pickEx" data-id="${id}"><b>${esc(name)}</b><span class="small muted">${esc(meta)}</span></button>`;
+  const libList = state.data.library.filter(m => !onList.has(`lib-${m.id}`) && match(m.name)).sort((a, b) => a.name.localeCompare(b.name)).map(m => `<button class="list-btn" data-act="pickLib" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="small muted">${esc((m.focus || []).map(f => FOCUS[f]).join(", ") || "Library")}</span></button>`).join("");
   const cust = [...customs.values()].filter(e => !onList.has(e.id) && match(e.name)).map(e => item(e.id, e.name, "Your exercise")).join("");
   const plan = Object.values(ALL_EX).filter(e => !onList.has(e.id) && match(e.n)).map(e => item(e.id, e.n, `Week ${e.week} ${e.day} · ${e.sr}`)).join("");
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Add an exercise"><div class="inner">
@@ -325,7 +335,10 @@ function drawPicker() {
       <label class="field">Name<input type="text" id="cx-name" placeholder="Hip Adductor Machine"></label>
       <div class="grid2"><label class="field">What you track<select id="cx-kind"><option value="load">Weight × reps</option><option value="bw">Reps only</option><option value="time">Time (seconds)</option><option value="carry">Weight × steps</option><option value="assist">Assist weight × reps</option></select></label>
       <label class="check" style="align-self:end"><input type="checkbox" id="cx-db"><span>Dumbbells (weight per hand)</span></label></div>
+      <div class="field"><span>What it works (so it shows up as a swap)</span><div class="focus-chips" id="cx-focus">${GROUPS.map(g => `<button type="button" data-act="libFocus" data-v="${g}" aria-pressed="false">${FOCUS[g]}</button>`).join("")}</div></div>
+      <label class="check"><input type="checkbox" id="cx-lib" checked><span>Save it to our gym library too</span></label>
       <button class="btn primary" data-act="addCustom">Add to today</button></section>
+    ${libList ? `<section class="card"><h3 class="h3">From the gym library</h3><div class="pick-list">${libList}</div></section>` : ""}
     ${cust ? `<section class="card"><h3 class="h3">Ones you've added before</h3><div class="pick-list">${cust}</div></section>` : ""}
     <section class="card"><h3 class="h3">From the plan</h3><div class="pick-list">${plan || `<p class="muted small">No matches.</p>`}</div></section>
   </div></div>`;
@@ -335,6 +348,83 @@ function addExtra(entry) {
   if (!xs.find(x => x.id === entry.id)) xs.push(entry);
   store.set(xKey(u, date), xs); closeOverlay(); render();
   setTimeout(() => document.getElementById(`ex-${entry.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+}
+
+// ---------------------------------------------------------------- definitions incl. library swaps
+function defOf(ex, v) {
+  if (ex.custom) return { name: ex.n, sr: ex.sr, kind: ex.kind, db: ex.db, focus: ex.focus?.length ? ex.focus : undefined };
+  if (String(v).startsWith("lib:")) {
+    const m = libItem(v.slice(4));
+    return { name: m?.name || "Library machine", sr: ex.sr, kind: m?.kind || ex.kind, db: !!m?.db, q: m?.name || ex.q };
+  }
+  return variantDef(ex, v);
+}
+function guessEquip(n) {
+  const s = n.toLowerCase();
+  if (/smith|barbell/.test(s)) return "barbell";
+  if (/cable|rope|pulley|face pull|pallof|woodchop|pulldown/.test(s)) return "cable";
+  if (/dumbbell|goblet|farmer|suitcase/.test(s)) return "dumbbell";
+  if (/machine|press|curl|extension|abductor|adductor|row|leg press|pec|deck|captain/.test(s)) return "machine";
+  if (/treadmill|bike|elliptical|rower|stair/.test(s)) return "cardio";
+  return "bodyweight";
+}
+
+// ---------------------------------------------------------------- library swap picker
+function openLibSwap(id) { state.overlay = "libswap"; state.libSwapFor = { u: LU(), date: LD(), id }; state.libSwapAll = false; drawLibSwap(); }
+function drawLibSwap() {
+  const { u, date, id } = state.libSwapFor; const ex = todaysList(u, date).find(x => x.ex.id === id)?.ex; if (!ex) return;
+  const rel = libForFocus(ex.focus).sort((a, b) => a.name.localeCompare(b.name));
+  const rest = state.data.library.filter(m => !rel.includes(m)).sort((a, b) => a.name.localeCompare(b.name));
+  const btn = m => `<button class="list-btn" data-act="pickLibSwap" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="small muted">${esc((m.focus || []).map(f => FOCUS[f]).join(", "))}${m.equip ? ` · ${esc(EQUIP[m.equip] || m.equip)}` : ""}</span></button>`;
+  $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Swap from library"><div class="inner">
+    <div class="between"><h2 class="h2">Swap from library</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
+    <p class="muted">Instead of <b>${esc(ex.n)}</b>, which works ${esc(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase()).join(" and "))}. Same target: ${esc(ex.sr)}.</p>
+    <section class="card"><h3 class="h3">Machines that work the same areas</h3>
+      ${rel.length ? `<div class="pick-list">${rel.map(btn).join("")}</div>` : `<p class="muted small">Nothing in the library works these areas yet. Add machines on the Gym tab and tag what they work.</p>`}</section>
+    ${rest.length ? (state.libSwapAll ? `<section class="card"><h3 class="h3">Everything else</h3><div class="pick-list">${rest.map(btn).join("")}</div></section>` : `<button class="btn" data-act="libShowAll">Show all ${state.data.library.length} machines</button>`) : ""}
+  </div></div>`;
+}
+
+// ---------------------------------------------------------------- GYM LIBRARY
+function viewGym() {
+  const lib = state.data.library.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const f = state.libFilter;
+  const shown = f === "all" ? lib : lib.filter(m => (m.focus || []).includes(f));
+  const editing = state.libEdit ? libItem(state.libEdit) : null;
+  const inLib = new Set(lib.map(m => m.name.toLowerCase()));
+  const quick = Object.values(ALL_EX).filter(e => !inLib.has(e.n.toLowerCase()) && !/push-up|plank|dead bug|v-up|crunch|sit-up|jump|lunge|carry|split squat|hold/i.test(e.n));
+  const seen = new Set(); const quickU = quick.filter(e => !seen.has(e.n) && seen.add(e.n));
+  const counts = Object.fromEntries(GROUPS.map(g => [g, lib.filter(m => (m.focus || []).includes(g)).length]));
+  return `<section class="card"><div class="between"><h2 class="h2">Gym library</h2><span class="small muted mono">${lib.length} machines</span></div>
+    <p class="small muted">The equipment at our gym, tagged by what it works. Swaps and "Add an exercise" pull from here.</p>
+    <div class="focus-chips">${[["all", `All ${lib.length}`], ...GROUPS.map(g => [g, `${FOCUS[g]} ${counts[g]}`])].map(([v, l]) => `<button type="button" data-act="libFilter" data-v="${v}" aria-pressed="${f === v}">${esc(l)}</button>`).join("")}</div>
+  </section>
+  ${shown.length ? `<section class="card">${shown.map(m => `<div class="list-item"><div><b>${esc(m.name)}</b><div class="small muted">${esc((m.focus || []).map(x => FOCUS[x]).join(", ") || "No focus tagged")}${m.equip ? ` · ${esc(EQUIP[m.equip] || m.equip)}` : ""} · ${esc(KIND_LABEL[m.kind || "load"])}</div>${m.notes ? `<div class="small">${esc(m.notes)}</div>` : ""}</div>
+    <div class="row"><button class="btn small" data-act="libEdit" data-id="${esc(m.id)}">Edit</button></div></div>`).join("")}</section>` : `<section class="card"><p class="muted">${lib.length ? "Nothing tagged with this area yet." : "The library is empty. Add the machines you see at the gym below, or quick-add the ones already in the plan."}</p></section>`}
+  ${libForm(editing)}
+  ${quickU.length ? `<section class="card"><details class="more"><summary>Quick add machines from our plan (${quickU.length})</summary><div class="panel"><p class="small muted">One tap adds it with the plan's focus areas. Edit afterwards if needed.</p><div class="pick-list">${quickU.map(e => `<button class="list-btn" data-act="libQuick" data-id="${e.id}"><b>${esc(e.n)}</b><span class="small muted">${esc(e.focus.filter(x => GROUPS.includes(x)).map(x => FOCUS[x]).join(", "))}</span></button>`).join("")}</div></div></details></section>` : ""}`;
+}
+function libForm(m) {
+  const focus = m?.focus || [];
+  return `<section class="card" id="lib-form"><h3 class="h3">${m ? `Edit ${esc(m.name)}` : "Add a machine"}</h3>
+    <label class="field">Name<input type="text" id="lib-name" value="${esc(m?.name || "")}" placeholder="Hip Adductor Machine"></label>
+    <div class="field"><span>What it works (pick all that apply)</span><div class="focus-chips" id="lib-focus">${GROUPS.map(g => `<button type="button" data-act="libFocus" data-v="${g}" aria-pressed="${focus.includes(g)}">${FOCUS[g]}</button>`).join("")}</div></div>
+    <div class="grid2">
+      <label class="field">Equipment<select id="lib-equip">${Object.entries(EQUIP).map(([k, l]) => `<option value="${k}" ${m?.equip === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="field">What you track<select id="lib-kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}" ${(m?.kind || "load") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="lib-db" ${m?.db ? "checked" : ""}><span>Dumbbells (weight per hand)</span></label>
+    <label class="field">Notes<textarea id="lib-notes" placeholder="Where it is, seat setting, how it works…">${esc(m?.notes || "")}</textarea></label>
+    <div class="row"><button class="btn primary" data-act="libSave">${m ? "Save changes" : "Add to library"}</button>${m ? `<button class="btn" data-act="libCancel">Cancel</button><button class="btn danger" data-act="libDelete" data-id="${esc(m.id)}">${state.confirmDel === m.id ? "Confirm delete" : "Delete"}</button>` : ""}</div>
+  </section>`;
+}
+function saveLibrary() {
+  const name = $("#lib-name").value.trim(); if (!name) { toast("Give it a name first."); return; }
+  const focus = [...document.querySelectorAll("#lib-focus [aria-pressed=true]")].map(b => b.dataset.v);
+  if (!focus.length) { toast("Pick at least one area it works, so it can show up as a swap."); return; }
+  const id = state.libEdit || slug(name);
+  save("library", id, { name, focus, equip: $("#lib-equip").value, kind: $("#lib-kind").value, db: $("#lib-db").checked, notes: $("#lib-notes").value.trim() });
+  toast(state.libEdit ? "Saved." : `Added ${name}.`); state.libEdit = null; render();
 }
 
 // ---------------------------------------------------------------- PROGRESS
@@ -358,7 +448,7 @@ function progLifts() {
   const [id, v] = state.progEx.split("|");
   const h = S.exHistory(state.data.sessions, u, id, v);
   const def = S.defFor(id, v, h[h.length - 1]);
-  const loggedOpts = [...logged.entries()].map(([k, n]) => `<option value="${esc(k)}" ${k === state.progEx ? "selected" : ""}>${esc(n)}${k.endsWith("|hard") ? " (harder)" : k.endsWith("|swap") ? " (swap)" : ""}</option>`).join("");
+  const loggedOpts = [...logged.entries()].map(([k, n]) => `<option value="${esc(k)}" ${k === state.progEx ? "selected" : ""}>${esc(n)}${k.endsWith("|hard") ? " (harder)" : k.endsWith("|swap") ? " (swap)" : k.includes("|lib:") ? " (library swap)" : ""}</option>`).join("");
   const planOpts = Object.values(ALL_EX).filter(e => !logged.has(`${e.id}|std`)).map(e => `<option value="${e.id}|std" ${`${e.id}|std` === state.progEx ? "selected" : ""}>${esc(e.n)} · ${e.week} ${e.day}</option>`).join("");
   const sug = ALL_EX[id] ? S.suggestion(state.data.sessions, u, id, v) : null;
   let tiles = "", table = "";
@@ -649,11 +739,11 @@ function cardFor(el) {
 }
 function saveExercise(c) {
   const v = c.d.variant;
-  const def = c.ex.custom ? { name: c.ex.n, kind: c.ex.kind, db: c.ex.db } : variantDef(c.ex, v);
+  const def = defOf(c.ex, v);
   const sets = c.d.sets.map(s => ({ w: +s.w || 0, r: +s.r || 0, d: +s.d || 2 })).filter(s => s.r > 0 || s.w > 0);
   if (!sets.length) { toast("Add at least one set first."); return; }
   if (def.kind === "load" || def.kind === "carry") { const i = sets.findIndex(s => !s.w); if (i >= 0) { toast(`Set ${i + 1} has no weight. Fill it in or remove that set.`); return; } }
-  const entry = { id: c.id, variant: v, name: def.name, kind: def.kind, db: !!def.db, sets, ...(c.added ? { added: true } : {}) };
+  const entry = { id: c.id, variant: v, name: def.name, kind: def.kind, db: !!def.db, sets, ...(c.added ? { added: true } : {}), ...(def.focus ? { focus: def.focus } : {}) };
   const s = sessionFor(c.u, c.date);
   const exercises = (s?.exercises || []).filter(e => e.id !== c.id);
   const planOrder = todaysList(c.u, c.date).map(x => x.ex.id);
@@ -722,8 +812,9 @@ document.addEventListener("click", e => {
     case "backToToday": state.logDate = null; state.sel = null; state.userTouchedSel = false; render(); break;
     case "variant": {
       const c = cardFor(el);
+      if (v === "lib") { openLibSwap(c.id); break; }
       if (v !== "swap") { state.variants[`${c.u}:${c.id}`] = v; store.set("twp-variants", state.variants); }
-      const def = variantDef(c.ex, v); const p = prefillSets(c.u, { sr: def.sr, kind: def.kind }, c.id, v);
+      const def = defOf(c.ex, v); const p = prefillSets(c.u, { sr: def.sr, kind: def.kind }, c.id, v);
       putDraft(c.u, c.date, c.id, { variant: v, ...p }); render(); break;
     }
     case "timer": { const c = cardFor(el); openTimer(c ? c.id : el.dataset.ex); break; }
@@ -749,10 +840,35 @@ document.addEventListener("click", e => {
     }
     case "dropExtra": { const c = cardFor(el); store.set(xKey(c.u, c.date), getExtras(c.u, c.date).filter(x => x.id !== c.id)); store.del(dKey(c.u, c.date, c.id)); render(); break; }
     case "openPicker": openPicker(); break;
+    case "libSwap": { const c = cardFor(el); openLibSwap(c.id); break; }
+    case "libShowAll": state.libSwapAll = true; drawLibSwap(); break;
+    case "pickLibSwap": {
+      const { u, date, id } = state.libSwapFor; const item = todaysList(u, date).find(x => x.ex.id === id); if (!item) break;
+      const v = `lib:${el.dataset.id}`; const def = defOf(item.ex, v);
+      putDraft(u, date, id, { variant: v, ...prefillSets(u, { sr: def.sr, kind: def.kind }, id, v) });
+      closeOverlay(); render(); setTimeout(() => document.getElementById(`ex-${id}`)?.scrollIntoView({ block: "center" }), 50); break;
+    }
+    case "libFilter": state.libFilter = v; render(); break;
+    case "libFocus": el.setAttribute("aria-pressed", el.getAttribute("aria-pressed") !== "true"); break;
+    case "libSave": saveLibrary(); break;
+    case "libEdit": state.libEdit = el.dataset.id; render(); setTimeout(() => $("#lib-form")?.scrollIntoView({ block: "start" }), 30); break;
+    case "libCancel": state.libEdit = null; render(); break;
+    case "libDelete": {
+      if (state.confirmDel !== el.dataset.id) { state.confirmDel = el.dataset.id; render(); break; }
+      remove("library", el.dataset.id); state.confirmDel = null; state.libEdit = null; toast("Removed from the library."); break;
+    }
+    case "libQuick": { const ex = ALL_EX[el.dataset.id]; save("library", slug(ex.n), { name: ex.n, focus: ex.focus.filter(f => GROUPS.includes(f)), equip: guessEquip(ex.n), kind: ex.kind, db: ex.db, notes: "" }); toast(`Added ${ex.n}.`); break; }
+    case "pickLib": { const m = libItem(el.dataset.id); if (m) addExtra({ id: `lib-${m.id}`, name: m.name, kind: m.kind || "load", db: !!m.db, focus: m.focus || [] }); break; }
     case "pickEx": { const ex = ALL_EX[el.dataset.id]; if (ex) addExtra({ id: ex.id, name: ex.n, kind: ex.kind, db: ex.db }); else { const found = state.data.sessions.flatMap(s => s.exercises || []).find(x => x.id === el.dataset.id); if (found) addExtra({ id: found.id, name: found.name, kind: found.kind, db: !!found.db }); } break; }
     case "addCustom": {
       const name = $("#cx-name").value.trim(); if (!name) { toast("Give it a name first."); break; }
-      addExtra({ id: `custom-${slug(name)}`, name, kind: $("#cx-kind").value, db: $("#cx-db").checked }); break;
+      const kind = $("#cx-kind").value, db = $("#cx-db").checked;
+      if ($("#cx-lib").checked) {
+        const focus = [...document.querySelectorAll("#cx-focus [aria-pressed=true]")].map(b => b.dataset.v);
+        save("library", slug(name), { name, focus, equip: guessEquip(name), kind, db, notes: "" });
+        addExtra({ id: `lib-${slug(name)}`, name, kind, db, focus });
+      } else addExtra({ id: `custom-${slug(name)}`, name, kind, db });
+      break;
     }
     case "saveCardio": saveCardio(false); render(); break;
     case "skipCardio": saveCardio(true); render(); break;
@@ -844,7 +960,7 @@ function updateSync() {
   if (state.error) { cls = "error"; text = "Problem"; }
   else if (!navigator.onLine) { cls = "offline"; text = "Offline"; }
   else if (f.some(x => x.pending)) { cls = "pending"; text = "Syncing"; }
-  else if (f.length < 4 || f.some(x => x.fromCache)) { cls = "pending"; text = "Connecting"; }
+  else if (f.length < COLLECTIONS.length || f.some(x => x.fromCache)) { cls = "pending"; text = "Connecting"; }
   el.className = "sync " + cls; el.textContent = text; el.title = text; el.setAttribute("aria-label", "Sync: " + text);
 }
 addEventListener("online", updateSync); addEventListener("offline", updateSync);

@@ -21,7 +21,7 @@ const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
-export const COLLECTIONS = ["sessions", "body", "activities", "settings"];
+export const COLLECTIONS = ["sessions", "body", "activities", "settings", "library"];
 
 // Calls onData(name, docs, fromCache) whenever a collection changes.
 export function connect(onData, onStatus) {
