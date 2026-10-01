@@ -17,9 +17,13 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - Works offline once installed. Anything logged without signal syncs later.
 
 **Gym library (Gym tab)**
-- The machines at our gym, each tagged with what it works (chest, shoulders, arms, back, core, glutes, legs, calves, cardio), equipment type, and notes.
-- Library swaps only offer machines that share a focus area with the planned exercise.
-- Quick-add the machines already in the plan.
+- 56 built-in dumbbell exercises (in `js/library.js`), plus anything you add. Machines get added here later.
+- Each one is tagged with equipment, focus, movement (push, pull, squat, hinge, lunge, carry…), position, difficulty, effort, impact, one-side-at-a-time, joint load on eight areas, and specific injury risks with how to avoid them.
+- Filter by any of those, search, and sort by name, difficulty, effort or impact.
+- Sore spots: tap what aches today and exercises that load it heavily are hidden or flagged, here and in swaps.
+- Add any exercise to today, or to Mat's, Benny's or both plans on any week and day. Remove planned exercises from a day on the Workout tab ("Edit this day's plan").
+- Library swaps rank by same movement, then same focus, and keep sore spots in mind.
+- Edit or hide any built-in exercise; your version is saved in the database and wins.
 
 **Progress**
 - A chart and history for every exercise, weekly sets per focus area, cardio, resting heart rate, and pain.
@@ -32,6 +36,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | File | What's in it |
 | --- | --- |
 | `js/plan.js` | The exercises, profiles, stretches, and cardio program. Edit this to change the plan. |
+| `js/library.js` | The built-in exercise library and its tags. |
 | `js/stats.js` | Progress math: best sets, weight-bump rules, reports. |
 | `js/app.js` | Screens and buttons. |
 | `js/firebase.js` | Database connection and Firebase config. |

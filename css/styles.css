@@ -186,3 +186,19 @@ pre.summary{white-space:pre-wrap;background:var(--inset);border-radius:10px;padd
 .focus-chips{display:flex;flex-wrap:wrap;gap:6px}
 .focus-chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font:600 .85rem var(--body);color:var(--muted);min-height:34px}
 .focus-chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* library */
+.lib-card .head{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:start}
+.lib-card .name{font-weight:700;font-size:1.05rem}
+.lib-card .sr{font:500 .85rem var(--mono);white-space:nowrap}
+.meters{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted)}
+.meters b{color:var(--ink);letter-spacing:.05em}
+.warn-text{color:var(--warn)}
+.risk{display:grid;gap:8px;background:var(--plate-soft);border-radius:10px;padding:10px 12px}
+.risk h4{color:var(--plate)}
+.risks{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem}
+.joint-chips{display:flex;flex-wrap:wrap;gap:6px}
+.jchip{font:600 .75rem var(--body);padding:3px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.jchip.high{border-color:var(--plate);color:var(--plate)}
+.focus-chips button.ache[aria-pressed="true"]{background:var(--plate);border-color:var(--plate)}
+.list-btn .bad{color:var(--bad)}

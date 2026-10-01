@@ -1,10 +1,10 @@
 // Offline support: the app shell is cached so it opens with no signal.
 // Workout data is handled separately by Firestore's own offline cache.
 // Bump VERSION whenever you change files, so phones pick up the update.
-const VERSION = "twp-v3";
+const VERSION = "twp-v4";
 const SHELL = [
   "./", "index.html", "css/styles.css",
-  "js/app.js", "js/plan.js", "js/stats.js", "js/firebase.js",
+  "js/app.js", "js/plan.js", "js/stats.js", "js/firebase.js", "js/library.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"
 ];
 const CDN = ["www.gstatic.com", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com"];

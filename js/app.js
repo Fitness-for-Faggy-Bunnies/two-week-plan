@@ -1,6 +1,7 @@
 // Two-Week Split — app shell, views and events.
 import { PROFILES, PLAN, STRETCH, CARDIO, DAYS, DAY_NAMES, ALL_EX, FOCUS, PAIN_AREAS, variantDef, defaultVariant, exDef } from "./plan.js";
 import * as S from "./stats.js";
+import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
 import { connect, save, remove, importAll, COLLECTIONS } from "./firebase.js";
 
 // ---------------------------------------------------------------- helpers
@@ -19,10 +20,46 @@ const DIFF = ["", "Easy", "Right", "Hard"];
 const VARIANT_LABEL = { std: "Standard", hard: "Harder", swap: "Swap" };
 const vLabel = v => (String(v).startsWith("lib:") ? "Library swap" : VARIANT_LABEL[v] || v);
 const GROUPS = ["chest", "shoulders", "arms", "back", "core", "glutes", "legs", "calves", "cardio"];
-const EQUIP = { machine: "Machine", cable: "Cable", dumbbell: "Dumbbells", barbell: "Barbell / Smith", bodyweight: "Bodyweight", cardio: "Cardio machine", other: "Other" };
 const KIND_LABEL = { load: "Weight × reps", bw: "Reps only", time: "Time (seconds)", carry: "Weight × steps", assist: "Assist weight × reps" };
-const libItem = id => state.data.library.find(x => x.id === id);
-const libForFocus = focus => state.data.library.filter(m => (m.focus || []).some(f => focus.includes(f)));
+// Library = built-in list + what's saved in the database (same id: saved version wins; hidden: removed).
+let libMemo = { src: null, list: [] };
+function allLibrary() {
+  if (libMemo.src === state.data.library) return libMemo.list;
+  const saved = new Map(state.data.library.map(d => [d.id, d]));
+  const out = [];
+  for (const b of BUILTIN) { const o = saved.get(b.id); saved.delete(b.id); if (o?.hidden) continue; out.push(o ? { ...b, ...o, builtin: true, edited: true } : b); }
+  for (const d of saved.values()) if (!d.hidden) out.push({ ...normalizeLib(d), builtin: false });
+  libMemo = { src: state.data.library, list: out };
+  return out;
+}
+const libItem = id => allLibrary().find(x => x.id === id);
+const hiddenBuiltins = () => state.data.library.filter(d => d.hidden && BUILTIN.some(b => b.id === d.id));
+const aches = u => state.data.settings.find(x => x.id === `aches_${u}`)?.areas || [];
+// Which of a person's sore areas an exercise loads: high (2) or some (1).
+function conflicts(m, u) {
+  const a = aches(u); const j = m.joints || {};
+  return { high: a.filter(x => j[x] === 2), some: a.filter(x => j[x] === 1) };
+}
+const dots = (n, max = 3) => "●".repeat(n) + "○".repeat(Math.max(0, max - n));
+// A library entry dressed as a workout exercise.
+function libEx(m) {
+  return { id: `lib-${m.id}`, n: m.name, sr: m.sr || "3 × 10", tag: "lib", focus: m.focus || [], kind: m.kind || "load", db: !!m.db,
+    why: m.how || m.notes || "", setup: m.how || m.notes || "", s: (STRETCH_BY_FOCUS[(m.focus || [])[0]] || []).slice(0, 2), swap: null,
+    q: m.name, h: null, v: null, notes: {}, lib: m, custom: false };
+}
+function resolveEx(id, entry) {
+  if (id.startsWith("lib-")) { const m = libItem(id.slice(4)); if (m) return libEx(m); }
+  return exDef(id, entry);
+}
+// Per-person plan changes: settings doc plan_<user> = { days: { "A-Mon": { add: [ids], remove: [ids] } } }
+const planEdits = u => state.data.settings.find(x => x.id === `plan_${u}`)?.days || {};
+function editPlan(users, weeks, day, fn) {
+  for (const u of users) {
+    const days = JSON.parse(JSON.stringify(planEdits(u)));
+    for (const w of weeks) { const k = `${w}-${day}`; days[k] = days[k] || { add: [], remove: [] }; fn(days[k]); }
+    save("settings", `plan_${u}`, { days });
+  }
+}
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 let toastTimer;
@@ -40,7 +77,7 @@ const state = {
   logUser: null, logDate: null, viewUser: null, sel: null, userTouchedSel: false,
   variants: store.get("twp-variants", {}),
   editing: new Set(),
-  data: { sessions: [], body: [], activities: [], settings: [], library: [] }, libFilter: "all", libEdit: null, libSwapFor: null,
+  data: { sessions: [], body: [], activities: [], settings: [], library: [] }, libF: { q: "", equip: "all", focus: "all", pattern: "all", difficulty: "all", effort: "all", impact: "all", sort: "name", hideSore: "yes", ...store.get("twp-libf", {}) }, libEdit: null, libSwapFor: null, addPlan: null, planEdit: false,
   flags: {}, error: null,
   progTab: "lifts", progEx: null, bodyField: "weight",
   repTab: "cycle", repCycle: null, cmpA: null, cmpB: null,
@@ -128,10 +165,12 @@ const getExtras = (u, date) => store.get(xKey(u, date), []);
 function todaysList(u, date) {
   const { week, day } = state.sel;
   const s = sessionFor(u, date);
-  const list = PLAN[week][day].ex.map(ex => ({ ex, added: false }));
+  const edits = planEdits(u)[`${week}-${day}`] || { add: [], remove: [] };
+  const list = PLAN[week][day].ex.filter(ex => !edits.remove.includes(ex.id)).map(ex => ({ ex, added: false }));
+  for (const id of edits.add) { const ex = resolveEx(id, {}); if (ex && !ex.custom) list.push({ ex, added: false, planned: true }); }
   const ids = new Set(list.map(x => x.ex.id));
-  for (const e of s?.exercises || []) if (!ids.has(e.id)) { ids.add(e.id); list.push({ ex: exDef(e.id, e), added: true }); }
-  for (const e of getExtras(u, date)) if (!ids.has(e.id)) { ids.add(e.id); list.push({ ex: exDef(e.id, e), added: true }); }
+  for (const e of s?.exercises || []) if (!ids.has(e.id)) { ids.add(e.id); list.push({ ex: resolveEx(e.id, e), added: true }); }
+  for (const e of getExtras(u, date)) if (!ids.has(e.id)) { ids.add(e.id); list.push({ ex: resolveEx(e.id, e), added: true }); }
   return list;
 }
 
@@ -190,6 +229,8 @@ function viewToday() {
     <h2 class="h2">${DAY_NAMES[day]} · ${esc(plan.title)}</h2>
     <details class="more"><summary>${esc(p.name)}'s focus, notes and date</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${p.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>
       <label class="field">Logging date<input type="date" data-act="logDate" value="${date}"></label></div></details>
+    <div class="row"><button class="btn small" data-act="planEdit" aria-pressed="${!!state.planEdit}">${state.planEdit ? "Done editing plan" : "Edit this day's plan"}</button></div>
+    ${state.planEdit ? planEditBox(u, week, day) : ""}
   </section>
   ${cardioCard(u, date, s)}
   ${list.map(({ ex, added }) => exerciseCard(u, date, ex, added, s)).join("")}
@@ -213,13 +254,13 @@ function exerciseCard(u, date, ex, added, s) {
   const def = defOf(ex, v);
   const opts = [["std", "Standard"]]; if (ex.h) opts.push(["hard", "Harder"]); if (ex.swap) opts.push(["swap", "Swap"]);
   if (!ex.custom) opts.push(["lib", "Library"]);
-  const why = lib ? (lib.notes || `From your gym library. Same target: ${ex.sr}.`) : v === "hard" && ex.h ? ex.h.how : v === "swap" && ex.swap ? ex.swap.how : ex.why;
+  const why = lib ? (lib.how || lib.notes || `From your gym library. Same target: ${ex.sr}.`) : v === "hard" && ex.h ? ex.h.how : v === "swap" && ex.swap ? ex.swap.how : ex.why;
   const last = S.lastTime(state.data.sessions, u, ex.id, v);
   const sug = ex.custom ? null : S.suggestion(state.data.sessions, u, ex.id, v);
   const pu = other(u), pLast = state.partner ? S.lastTime(state.data.sessions, pu, ex.id, ex.custom ? "std" : variantOf(pu, ex)) : null;
   const entry = { kind: def.kind, db: def.db };
   return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
-    <div class="head"><div class="name">${esc(def.name)}${ex.custom || lib ? "" : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}</div><span class="sr">${esc(def.sr || "")}</span></div>
+    <div class="head"><div class="name">${esc(def.name)}${ex.custom || lib ? "" : ex.lib ? `<span class="tag orig">Library</span>` : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}</div><span class="sr">${esc(def.sr || "")}</span></div>
     ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
     ${lib ? `<div class="row"><a class="video" href="${yt(lib.name)}" target="_blank" rel="noopener">Watch form videos</a><button class="btn small" data-act="libSwap">Change machine</button></div>` : ""}
@@ -232,6 +273,7 @@ function exerciseCard(u, date, ex, added, s) {
     <div class="row"><button class="btn small" data-act="addSet">+ Add set</button><button class="btn small" data-act="timer">Rest timer</button>
       ${logged ? `<button class="btn small" data-act="cancelEdit">Cancel</button><button class="btn small danger" data-act="deleteEx">${state.confirmDel === ek ? "Confirm delete" : "Delete"}</button>` : added ? `<button class="btn small danger" data-act="dropExtra">Remove</button>` : ""}</div>
     <button class="btn primary block" data-act="saveEx">${logged ? "Save changes" : "Save exercise"}</button>
+    ${state.planEdit && !added ? `<button class="btn small danger" data-act="planRemove">Remove from ${PROFILES[u].name}'s plan for Week ${state.sel.week} ${state.sel.day}</button>` : ""}
     ${ex.custom ? "" : `<details class="more"><summary>Form, video &amp; stretches</summary>${exPanel(ex)}</details>`}
   </article>`;
 }
@@ -239,6 +281,7 @@ function exerciseCard(u, date, ex, added, s) {
 function exPanel(ex) {
   return `<div class="panel">
     <div><h4>How to do it · ${esc(ex.n)}</h4><p>${esc(ex.setup)}</p><a class="video" href="${yt(ex.q)}" target="_blank" rel="noopener">Watch form videos</a></div>
+    ${ex.lib ? riskBlock(ex.lib) : ""}
     ${ex.h ? `<div><h4>Harder · ${esc(ex.h.n)} · ${esc(ex.h.sr)}</h4><p>${esc(ex.h.how)}</p><a class="video" href="${yt(ex.h.q)}" target="_blank" rel="noopener">Watch form videos</a></div>` : ""}
     ${ex.swap ? `<div><h4>Swap · ${esc(ex.swap.n)}${ex.swap.sr ? ` · ${esc(ex.swap.sr)}` : ""}</h4><p>${esc(ex.swap.how)}</p><a class="video" href="${yt(ex.swap.q)}" target="_blank" rel="noopener">Watch form videos</a></div>` : ""}
     ${ex.v ? `<div><h4>More lunge types to rotate in</h4><div class="panel">${ex.v.map(x => `<div class="stretch"><b>${esc(x.n)}</b><p>${esc(x.h)}</p><a href="${yt(x.q)}" target="_blank" rel="noopener">Video</a></div>`).join("")}</div></div>` : ""}
@@ -325,13 +368,13 @@ function drawPicker() {
   for (const s of state.data.sessions) for (const e of s.exercises || []) if (e.id.startsWith("custom-")) customs.set(e.id, e);
   const match = n => !q || n.toLowerCase().includes(q);
   const item = (id, name, meta) => `<button class="list-btn" data-act="pickEx" data-id="${id}"><b>${esc(name)}</b><span class="small muted">${esc(meta)}</span></button>`;
-  const libList = state.data.library.filter(m => !onList.has(`lib-${m.id}`) && match(m.name)).sort((a, b) => a.name.localeCompare(b.name)).map(m => `<button class="list-btn" data-act="pickLib" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="small muted">${esc((m.focus || []).map(f => FOCUS[f]).join(", ") || "Library")}</span></button>`).join("");
+  const libList = allLibrary().filter(m => !onList.has(`lib-${m.id}`) && match(m.name)).sort((a, b) => a.name.localeCompare(b.name)).map(m => `<button class="list-btn" data-act="pickLib" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="small muted">${esc([EQUIP[m.equip], (m.focus || []).map(f => FOCUS[f]).join(", ")].filter(Boolean).join(" · "))}</span></button>`).join("");
   const cust = [...customs.values()].filter(e => !onList.has(e.id) && match(e.name)).map(e => item(e.id, e.name, "Your exercise")).join("");
   const plan = Object.values(ALL_EX).filter(e => !onList.has(e.id) && match(e.n)).map(e => item(e.id, e.n, `Week ${e.week} ${e.day} · ${e.sr}`)).join("");
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Add an exercise"><div class="inner">
     <div class="between"><h2 class="h2">Add an exercise</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
     <label class="field">Search<input type="text" id="picker-q" data-act="pickerQ" value="${esc(state.pickerQ)}" placeholder="Hip adductor, row, curl…" autocomplete="off"></label>
-    <section class="card"><h3 class="h3">A machine that isn't in the plan</h3>
+    <section class="card"><h3 class="h3">Something new</h3>
       <label class="field">Name<input type="text" id="cx-name" placeholder="Hip Adductor Machine"></label>
       <div class="grid2"><label class="field">What you track<select id="cx-kind"><option value="load">Weight × reps</option><option value="bw">Reps only</option><option value="time">Time (seconds)</option><option value="carry">Weight × steps</option><option value="assist">Assist weight × reps</option></select></label>
       <label class="check" style="align-self:end"><input type="checkbox" id="cx-db"><span>Dumbbells (weight per hand)</span></label></div>
@@ -352,10 +395,11 @@ function addExtra(entry) {
 
 // ---------------------------------------------------------------- definitions incl. library swaps
 function defOf(ex, v) {
+  if (ex.lib && !String(v).startsWith("lib:")) return { name: ex.n, sr: ex.sr, kind: ex.kind, db: ex.db, focus: ex.focus, q: ex.q };
   if (ex.custom) return { name: ex.n, sr: ex.sr, kind: ex.kind, db: ex.db, focus: ex.focus?.length ? ex.focus : undefined };
   if (String(v).startsWith("lib:")) {
     const m = libItem(v.slice(4));
-    return { name: m?.name || "Library machine", sr: ex.sr, kind: m?.kind || ex.kind, db: !!m?.db, q: m?.name || ex.q };
+    return { name: m?.name || "Library exercise", sr: ex.sr, kind: m?.kind || ex.kind, db: !!m?.db, q: m?.name || ex.q, focus: m?.focus };
   }
   return variantDef(ex, v);
 }
@@ -373,58 +417,190 @@ function guessEquip(n) {
 function openLibSwap(id) { state.overlay = "libswap"; state.libSwapFor = { u: LU(), date: LD(), id }; state.libSwapAll = false; drawLibSwap(); }
 function drawLibSwap() {
   const { u, date, id } = state.libSwapFor; const ex = todaysList(u, date).find(x => x.ex.id === id)?.ex; if (!ex) return;
-  const rel = libForFocus(ex.focus).sort((a, b) => a.name.localeCompare(b.name));
-  const rest = state.data.library.filter(m => !rel.includes(m)).sort((a, b) => a.name.localeCompare(b.name));
-  const btn = m => `<button class="list-btn" data-act="pickLibSwap" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="small muted">${esc((m.focus || []).map(f => FOCUS[f]).join(", "))}${m.equip ? ` · ${esc(EQUIP[m.equip] || m.equip)}` : ""}</span></button>`;
+  const pattern = PLAN_PATTERN[ex.id] || ex.lib?.pattern || "";
+  const scored = allLibrary().filter(m => `lib-${m.id}` !== ex.id).map(m => {
+    const overlap = (m.focus || []).filter(f => ex.focus.includes(f)).length;
+    return { m, score: (pattern && m.pattern === pattern ? 3 : 0) + overlap * 2 + ((m.focus2 || []).some(f => ex.focus.includes(f)) ? 1 : 0), same: pattern && m.pattern === pattern, overlap };
+  }).filter(x => x.overlap > 0 || x.same).sort((a, b) => b.score - a.score || a.m.name.localeCompare(b.m.name));
+  const ok = scored.filter(x => !conflicts(x.m, u).high.length);
+  const sore = scored.filter(x => conflicts(x.m, u).high.length);
+  const btn = ({ m, same }) => {
+    const c = conflicts(m, u);
+    return `<button class="list-btn" data-act="pickLibSwap" data-id="${esc(m.id)}"><b>${esc(m.name)}</b>
+      <span class="small muted">${esc([EQUIP[m.equip], (m.focus || []).map(f => FOCUS[f]).join(", "), same ? `same movement (${PATTERN[m.pattern]})` : ""].filter(Boolean).join(" · "))}</span>
+      <span class="small muted">Difficulty ${dots(m.difficulty)} · Effort ${dots(m.effort)} · Impact ${LEVEL.impact[m.impact || 0]}</span>
+      ${c.high.length ? `<span class="small bad">Hard on your ${esc(c.high.map(j => JOINTS[j].toLowerCase()).join(" and "))}</span>` : c.some.length ? `<span class="small warn-text">Some load on your ${esc(c.some.map(j => JOINTS[j].toLowerCase()).join(" and "))}</span>` : ""}</button>`;
+  };
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Swap from library"><div class="inner">
     <div class="between"><h2 class="h2">Swap from library</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
-    <p class="muted">Instead of <b>${esc(ex.n)}</b>, which works ${esc(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase()).join(" and "))}. Same target: ${esc(ex.sr)}.</p>
-    <section class="card"><h3 class="h3">Machines that work the same areas</h3>
-      ${rel.length ? `<div class="pick-list">${rel.map(btn).join("")}</div>` : `<p class="muted small">Nothing in the library works these areas yet. Add machines on the Gym tab and tag what they work.</p>`}</section>
-    ${rest.length ? (state.libSwapAll ? `<section class="card"><h3 class="h3">Everything else</h3><div class="pick-list">${rest.map(btn).join("")}</div></section>` : `<button class="btn" data-act="libShowAll">Show all ${state.data.library.length} machines</button>`) : ""}
+    <p class="muted">Instead of <b>${esc(ex.n)}</b>${pattern ? ` (${esc(PATTERN[pattern].toLowerCase())})` : ""}, which works ${esc(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase()).join(" and "))}. Same target: ${esc(ex.sr)}. Best matches first.</p>
+    ${aches(u).length ? `<p class="small">Sore today: ${esc(aches(u).map(j => JOINTS[j]).join(", "))}. Change this on the Gym tab.</p>` : ""}
+    <section class="card"><div class="pick-list">${ok.length ? ok.map(btn).join("") : `<p class="muted small">No matches in the library yet.</p>`}</div></section>
+    ${sore.length ? `<section class="card"><h3 class="h3">Hard on your sore areas</h3><div class="pick-list">${sore.map(btn).join("")}</div></section>` : ""}
   </div></div>`;
+}
+
+function riskBlock(m) {
+  const j = Object.entries(m.joints || {}).filter(([, v]) => v);
+  if (!j.length && !m.risks?.length && !m.heavy) return "";
+  return `<div class="risk"><h4>Joints and injury risks</h4>
+    ${j.length ? `<div class="joint-chips">${j.map(([k, v]) => `<span class="jchip ${v === 2 ? "high" : ""}">${esc(JOINTS[k])}: ${v === 2 ? "high load" : "some load"}</span>`).join("")}</div>` : ""}
+    ${m.risks?.length ? `<ul class="risks">${m.risks.map(r => `<li><b>${esc(r.risk)}.</b> ${esc(r.avoid || "")}</li>`).join("")}</ul>` : ""}
+    ${m.heavy ? `<p class="small"><b>At our gym (dumbbells to about ${GYM.maxDumbbell} lb):</b> ${esc(m.heavy)}</p>` : ""}
+    <p class="small muted">General guidance, not medical advice. Sharp or lasting pain is worth a doctor or physical therapist visit.</p></div>`;
 }
 
 // ---------------------------------------------------------------- GYM LIBRARY
 function viewGym() {
-  const lib = state.data.library.slice().sort((a, b) => a.name.localeCompare(b.name));
-  const f = state.libFilter;
-  const shown = f === "all" ? lib : lib.filter(m => (m.focus || []).includes(f));
-  const editing = state.libEdit ? libItem(state.libEdit) : null;
-  const inLib = new Set(lib.map(m => m.name.toLowerCase()));
-  const quick = Object.values(ALL_EX).filter(e => !inLib.has(e.n.toLowerCase()) && !/push-up|plank|dead bug|v-up|crunch|sit-up|jump|lunge|carry|split squat|hold/i.test(e.n));
+  const F = state.libF; const u = state.viewUser;
+  const all = allLibrary();
+  const sore = aches(u);
+  let list = all.filter(m =>
+    (F.equip === "all" || m.equip === F.equip) &&
+    (F.focus === "all" || (m.focus || []).includes(F.focus) || (m.focus2 || []).includes(F.focus)) &&
+    (F.pattern === "all" || m.pattern === F.pattern) &&
+    (F.difficulty === "all" || String(m.difficulty) === F.difficulty) &&
+    (F.effort === "all" || String(m.effort) === F.effort) &&
+    (F.impact === "all" || (m.impact || 0) <= +F.impact) &&
+    (!F.q || m.name.toLowerCase().includes(F.q.toLowerCase())));
+  const hiddenBySore = F.hideSore === "yes" ? list.filter(m => conflicts(m, u).high.length) : [];
+  list = list.filter(m => !hiddenBySore.includes(m));
+  const sorts = {
+    name: (a, b) => a.name.localeCompare(b.name),
+    easy: (a, b) => a.difficulty - b.difficulty || a.name.localeCompare(b.name),
+    hard: (a, b) => b.difficulty - a.difficulty || a.name.localeCompare(b.name),
+    light: (a, b) => a.effort - b.effort || a.name.localeCompare(b.name),
+    heavy: (a, b) => b.effort - a.effort || a.name.localeCompare(b.name),
+    impact: (a, b) => (a.impact || 0) - (b.impact || 0) || a.name.localeCompare(b.name)
+  };
+  list.sort(sorts[F.sort] || sorts.name);
+  const equipCounts = Object.fromEntries(Object.keys(EQUIP).map(k => [k, all.filter(m => m.equip === k).length]));
+  const sel = (k, label, opts) => `<label class="field">${label}<select data-act="libSel" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(F[k]) === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
+  const chips = (k, opts) => `<div class="focus-chips">${opts.map(([v, l]) => `<button type="button" data-act="libF" data-k="${k}" data-v="${v}" aria-pressed="${F[k] === v}">${esc(l)}</button>`).join("")}</div>`;
+  const editing = state.libEdit ? (state.libEdit === "new" ? {} : libItem(state.libEdit)) : null;
+  const ap = state.addPlan;
+  const hidden = hiddenBuiltins();
+  const quick = Object.values(ALL_EX).filter(e => /machine|cable|smith|pulldown|pec|deck|press \(|leg press|captain|row machine|torso/i.test(e.n) && !all.some(m => m.name.toLowerCase() === e.n.toLowerCase()));
   const seen = new Set(); const quickU = quick.filter(e => !seen.has(e.n) && seen.add(e.n));
-  const counts = Object.fromEntries(GROUPS.map(g => [g, lib.filter(m => (m.focus || []).includes(g)).length]));
-  return `<section class="card"><div class="between"><h2 class="h2">Gym library</h2><span class="small muted mono">${lib.length} machines</span></div>
-    <p class="small muted">The equipment at our gym, tagged by what it works. Swaps and "Add an exercise" pull from here.</p>
-    <div class="focus-chips">${[["all", `All ${lib.length}`], ...GROUPS.map(g => [g, `${FOCUS[g]} ${counts[g]}`])].map(([v, l]) => `<button type="button" data-act="libFilter" data-v="${v}" aria-pressed="${f === v}">${esc(l)}</button>`).join("")}</div>
+  return `<section class="card">
+    <div class="between"><h2 class="h2">Gym library</h2>${personToggle()}</div>
+    <p class="small muted">${all.length} exercises. ${esc(GYM.name)} dumbbells go to about ${GYM.maxDumbbell} lb. Swaps and "Add an exercise" pull from here.</p>
+    ${ap ? `<div class="banner">Adding to ${ap.who === "both" ? "both plans" : PROFILES[ap.who].name + "'s plan"}: tap <b>Add to plan</b> on any exercise. <button class="btn small" data-act="apCancel">Cancel</button></div>` : ""}
+    <label class="field">Search<input type="text" id="lib-q" data-act="libQ" value="${esc(F.q)}" placeholder="Row, lunge, press…" autocomplete="off"></label>
+    <div class="field"><span>Equipment</span>${chips("equip", [["all", `All ${all.length}`], ...Object.entries(EQUIP).filter(([k]) => equipCounts[k]).map(([k, l]) => [k, `${l} ${equipCounts[k]}`])])}</div>
+    <div class="field"><span>Focus</span>${chips("focus", [["all", "All"], ...GROUPS.map(g => [g, FOCUS[g]])])}</div>
+    <details class="more"><summary>More filters and sorting</summary><div class="panel"><div class="grid2">
+      ${sel("pattern", "Movement", [["all", "Any"], ...Object.entries(PATTERN)])}
+      ${sel("difficulty", "Difficulty", [["all", "Any"], ["1", "Beginner"], ["2", "Intermediate"], ["3", "Advanced"]])}
+      ${sel("effort", "Effort", [["all", "Any"], ["1", "Light"], ["2", "Moderate"], ["3", "Hard"]])}
+      ${sel("impact", "Impact", [["all", "Any"], ["0", "None only"], ["1", "Low or none"]])}
+      ${sel("sort", "Sort by", [["name", "Name"], ["easy", "Easiest first"], ["hard", "Hardest first"], ["light", "Least effort"], ["heavy", "Most effort"], ["impact", "Lowest impact"]])}
+    </div></div></details>
+    <div class="field"><span>${PROFILES[u].name}'s sore spots today</span><div class="focus-chips">${Object.entries(JOINTS).map(([k, l]) => `<button type="button" class="ache" data-act="ache" data-v="${k}" aria-pressed="${sore.includes(k)}">${esc(l)}</button>`).join("")}</div></div>
+    ${sore.length ? `<label class="field">Exercises that load sore spots heavily<select data-act="libSel" data-k="hideSore"><option value="yes" ${F.hideSore === "yes" ? "selected" : ""}>Hide them</option><option value="no" ${F.hideSore !== "yes" ? "selected" : ""}>Show them with a warning</option></select></label>` : ""}
+    <div class="between"><span class="small muted mono">Showing ${list.length}${hiddenBySore.length ? ` · ${hiddenBySore.length} hidden for sore spots` : ""}</span><button class="btn small" data-act="libNew">+ New exercise or machine</button></div>
   </section>
-  ${shown.length ? `<section class="card">${shown.map(m => `<div class="list-item"><div><b>${esc(m.name)}</b><div class="small muted">${esc((m.focus || []).map(x => FOCUS[x]).join(", ") || "No focus tagged")}${m.equip ? ` · ${esc(EQUIP[m.equip] || m.equip)}` : ""} · ${esc(KIND_LABEL[m.kind || "load"])}</div>${m.notes ? `<div class="small">${esc(m.notes)}</div>` : ""}</div>
-    <div class="row"><button class="btn small" data-act="libEdit" data-id="${esc(m.id)}">Edit</button></div></div>`).join("")}</section>` : `<section class="card"><p class="muted">${lib.length ? "Nothing tagged with this area yet." : "The library is empty. Add the machines you see at the gym below, or quick-add the ones already in the plan."}</p></section>`}
-  ${libForm(editing)}
-  ${quickU.length ? `<section class="card"><details class="more"><summary>Quick add machines from our plan (${quickU.length})</summary><div class="panel"><p class="small muted">One tap adds it with the plan's focus areas. Edit afterwards if needed.</p><div class="pick-list">${quickU.map(e => `<button class="list-btn" data-act="libQuick" data-id="${e.id}"><b>${esc(e.n)}</b><span class="small muted">${esc(e.focus.filter(x => GROUPS.includes(x)).map(x => FOCUS[x]).join(", "))}</span></button>`).join("")}</div></div></details></section>` : ""}`;
+  ${editing ? libForm(editing) : ""}
+  ${list.map(m => libCard(m, u)).join("") || `<section class="card"><p class="muted">Nothing matches these filters.</p></section>`}
+  ${quickU.length ? `<section class="card"><details class="more"><summary>Quick add machines from our plan (${quickU.length})</summary><div class="panel"><p class="small muted">For when you're ready to add the real machines. One tap adds it with the plan's focus areas; edit it afterwards to fill in joints and risks.</p><div class="pick-list">${quickU.map(e => `<button class="list-btn" data-act="libQuick" data-id="${e.id}"><b>${esc(e.n)}</b><span class="small muted">${esc(e.focus.filter(x => GROUPS.includes(x)).map(x => FOCUS[x]).join(", "))}</span></button>`).join("")}</div></div></details></section>` : ""}
+  ${hidden.length ? `<section class="card"><h3 class="h3">Hidden exercises</h3>${hidden.map(d => { const b = BUILTIN.find(x => x.id === d.id); return `<div class="list-item"><span>${esc(b.name)}</span><button class="btn small" data-act="libRestore" data-id="${esc(d.id)}">Restore</button></div>`; }).join("")}</section>` : ""}`;
+}
+function libCard(m, u) {
+  const c = conflicts(m, u);
+  return `<article class="card lib-card">
+    <div class="head"><div class="name">${esc(m.name)}</div><span class="sr">${esc(m.sr || "")}</span></div>
+    <div class="small muted">${esc([EQUIP[m.equip], PATTERN[m.pattern], POSITION[m.position], m.unilateral ? "One side at a time" : ""].filter(Boolean).join(" · "))}</div>
+    <div class="small"><b>${esc((m.focus || []).map(f => FOCUS[f]).join(", "))}</b>${m.focus2?.length ? `<span class="muted"> · also ${esc(m.focus2.map(f => FOCUS[f].toLowerCase()).join(", "))}</span>` : ""}</div>
+    <div class="meters small"><span>Difficulty <b class="mono">${dots(m.difficulty)}</b></span><span>Effort <b class="mono">${dots(m.effort)}</b></span><span>Impact <b>${LEVEL.impact[m.impact || 0]}</b></span></div>
+    ${c.high.length ? `<div class="pill hold">Hard on your ${esc(c.high.map(j => JOINTS[j].toLowerCase()).join(" and "))} today.</div>` : c.some.length ? `<div class="small warn-text">Some load on your ${esc(c.some.map(j => JOINTS[j].toLowerCase()).join(" and "))}.</div>` : ""}
+    <details class="more"><summary>How to, risks &amp; video</summary><div class="panel">
+      ${m.how ? `<p>${esc(m.how)}</p>` : ""}
+      <a class="video" href="${yt(m.name)}" target="_blank" rel="noopener">Watch form videos</a>
+      ${riskBlock(m)}
+    </div></details>
+    <div class="row"><button class="btn small" data-act="libToday" data-id="${esc(m.id)}">Add to today</button><button class="btn small" data-act="libPlan" data-id="${esc(m.id)}">Add to plan</button><button class="btn small" data-act="libEdit" data-id="${esc(m.id)}">Edit</button></div>
+  </article>`;
 }
 function libForm(m) {
-  const focus = m?.focus || [];
-  return `<section class="card" id="lib-form"><h3 class="h3">${m ? `Edit ${esc(m.name)}` : "Add a machine"}</h3>
-    <label class="field">Name<input type="text" id="lib-name" value="${esc(m?.name || "")}" placeholder="Hip Adductor Machine"></label>
-    <div class="field"><span>What it works (pick all that apply)</span><div class="focus-chips" id="lib-focus">${GROUPS.map(g => `<button type="button" data-act="libFocus" data-v="${g}" aria-pressed="${focus.includes(g)}">${FOCUS[g]}</button>`).join("")}</div></div>
+  const isNew = !m.id; const j = m.joints || {};
+  const focus = m.focus || [];
+  const opt = (obj, cur) => Object.entries(obj).map(([k, l]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${esc(l)}</option>`).join("");
+  const lvl = (name, arr, cur, start = 1) => `<select id="lib-${name}">${arr.map((l, i) => i >= start ? `<option value="${i}" ${+cur === i ? "selected" : ""}>${esc(l)}</option>` : "").join("")}</select>`;
+  const risksText = (m.risks || []).map(r => `${r.area ? (JOINTS[r.area] || r.area) + ": " : ""}${r.risk}${r.avoid ? " — " + r.avoid : ""}`).join("\n");
+  return `<section class="card" id="lib-form"><h3 class="h3">${isNew ? "New exercise or machine" : `Edit ${esc(m.name)}`}</h3>
+    <label class="field">Name<input type="text" id="lib-name" value="${esc(m.name || "")}" placeholder="Hip Adductor Machine"></label>
+    <div class="field"><span>Main focus (pick all that apply)</span><div class="focus-chips" id="lib-focus">${GROUPS.map(g => `<button type="button" data-act="libFocus" data-v="${g}" aria-pressed="${focus.includes(g)}">${FOCUS[g]}</button>`).join("")}</div></div>
     <div class="grid2">
-      <label class="field">Equipment<select id="lib-equip">${Object.entries(EQUIP).map(([k, l]) => `<option value="${k}" ${m?.equip === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label class="field">What you track<select id="lib-kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}" ${(m?.kind || "load") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="field">Equipment<select id="lib-equip">${opt(EQUIP, m.equip || "machine")}</select></label>
+      <label class="field">Movement<select id="lib-pattern"><option value="">Not set</option>${opt(PATTERN, m.pattern)}</select></label>
+      <label class="field">Position<select id="lib-position"><option value="">Not set</option>${opt(POSITION, m.position)}</select></label>
+      <label class="field">What you track<select id="lib-kind">${opt(KIND_LABEL, m.kind || "load")}</select></label>
+      <label class="field">Difficulty${lvl("difficulty", LEVEL.difficulty, m.difficulty || 1)}</label>
+      <label class="field">Effort${lvl("effort", LEVEL.effort, m.effort || 2)}</label>
+      <label class="field">Impact${lvl("impact", LEVEL.impact, m.impact || 0, 0)}</label>
+      <label class="field">Sets × reps<input type="text" id="lib-sr" value="${esc(m.sr || "3 × 10")}"></label>
     </div>
-    <label class="check"><input type="checkbox" id="lib-db" ${m?.db ? "checked" : ""}><span>Dumbbells (weight per hand)</span></label>
-    <label class="field">Notes<textarea id="lib-notes" placeholder="Where it is, seat setting, how it works…">${esc(m?.notes || "")}</textarea></label>
-    <div class="row"><button class="btn primary" data-act="libSave">${m ? "Save changes" : "Add to library"}</button>${m ? `<button class="btn" data-act="libCancel">Cancel</button><button class="btn danger" data-act="libDelete" data-id="${esc(m.id)}">${state.confirmDel === m.id ? "Confirm delete" : "Delete"}</button>` : ""}</div>
+    <label class="check"><input type="checkbox" id="lib-db" ${m.db ? "checked" : ""}><span>Dumbbells (weight per hand)</span></label>
+    <label class="check"><input type="checkbox" id="lib-uni" ${m.unilateral ? "checked" : ""}><span>One side at a time</span></label>
+    <div class="field"><span>Joint load</span><div class="grid2">${Object.entries(JOINTS).map(([k, l]) => `<label class="field">${esc(l)}<select data-joint="${k}"><option value="0">None</option><option value="1" ${j[k] === 1 ? "selected" : ""}>Some</option><option value="2" ${j[k] === 2 ? "selected" : ""}>High</option></select></label>`).join("")}</div></div>
+    <label class="field">How to do it<textarea id="lib-how" placeholder="Seat setting, grip, the movement…">${esc(m.how || m.notes || "")}</textarea></label>
+    <label class="field">Injury risks, one per line (Area: what can go wrong — how to avoid it)<textarea id="lib-risks" placeholder="Knees: pain from locking out — stop just short of straight">${esc(risksText)}</textarea></label>
+    <div class="row"><button class="btn primary" data-act="libSave">${isNew ? "Add to library" : "Save changes"}</button><button class="btn" data-act="libCancel">Cancel</button>
+      ${isNew ? "" : `<button class="btn danger" data-act="libDelete" data-id="${esc(m.id)}">${state.confirmDel === m.id ? "Tap again to confirm" : m.builtin ? "Hide" : "Delete"}</button>`}</div>
   </section>`;
 }
 function saveLibrary() {
   const name = $("#lib-name").value.trim(); if (!name) { toast("Give it a name first."); return; }
   const focus = [...document.querySelectorAll("#lib-focus [aria-pressed=true]")].map(b => b.dataset.v);
-  if (!focus.length) { toast("Pick at least one area it works, so it can show up as a swap."); return; }
-  const id = state.libEdit || slug(name);
-  save("library", id, { name, focus, equip: $("#lib-equip").value, kind: $("#lib-kind").value, db: $("#lib-db").checked, notes: $("#lib-notes").value.trim() });
-  toast(state.libEdit ? "Saved." : `Added ${name}.`); state.libEdit = null; render();
+  if (!focus.length) { toast("Pick at least one focus area, so it can show up as a swap."); return; }
+  const joints = {}; document.querySelectorAll("[data-joint]").forEach(sel => { if (+sel.value) joints[sel.dataset.joint] = +sel.value; });
+  const areaByLabel = Object.fromEntries(Object.entries(JOINTS).map(([k, l]) => [l.toLowerCase(), k]));
+  const risks = $("#lib-risks").value.split("\n").map(x => x.trim()).filter(Boolean).map(line => {
+    const m = line.match(/^([^:]{2,20}):\s*(.*)$/); let area = "", rest = line;
+    if (m && areaByLabel[m[1].toLowerCase()]) { area = areaByLabel[m[1].toLowerCase()]; rest = m[2]; }
+    const [risk, avoid = ""] = rest.split(/\s+—\s+|\s+-\s+/);
+    return { area, risk: risk.replace(/\.$/, ""), avoid };
+  });
+  const id = state.libEdit !== "new" ? state.libEdit : slug(name);
+  save("library", id, {
+    name, focus, equip: $("#lib-equip").value, pattern: $("#lib-pattern").value, position: $("#lib-position").value, kind: $("#lib-kind").value,
+    difficulty: +$("#lib-difficulty").value, effort: +$("#lib-effort").value, impact: +$("#lib-impact").value, sr: $("#lib-sr").value.trim() || "3 × 10",
+    db: $("#lib-db").checked, unilateral: $("#lib-uni").checked, joints, how: $("#lib-how").value.trim(), risks
+  });
+  toast(state.libEdit !== "new" ? "Saved." : `Added ${name}.`); state.libEdit = null; render();
+}
+
+// ---------------------------------------------------------------- plan editing
+function planEditBox(u, week, day) {
+  const edits = planEdits(u)[`${week}-${day}`] || { add: [], remove: [] };
+  const removed = edits.remove.map(id => ALL_EX[id]).filter(Boolean);
+  return `<div class="banner">Editing ${PROFILES[u].name}'s plan for Week ${week} ${DAY_NAMES[day]}. Remove buttons are on each exercise below.</div>
+    ${removed.length ? `<div class="field"><span>Removed from this day</span>${removed.map(e => `<div class="list-item"><span>${esc(e.n)}</span><button class="btn small" data-act="planRestore" data-id="${e.id}">Put back</button></div>`).join("")}</div>` : ""}
+    <button class="btn small" data-act="planFromLib">+ Add from the library</button>`;
+}
+function openAddPlan(libId) {
+  const pre = state.addPlan || {};
+  state.addPlan = { libId, who: pre.who || state.viewUser, week: pre.week || state.sel?.week || "A", day: pre.day || state.sel?.day || "Mon" };
+  state.overlay = "addplan"; drawAddPlan();
+}
+function drawAddPlan() {
+  const a = state.addPlan; const m = libItem(a.libId);
+  const segA = (k, opts) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button data-act="apSet" data-k="${k}" data-v="${v}" aria-pressed="${a[k] === v}">${esc(l)}</button>`).join("")}</div>`;
+  $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Add to plan"><div class="inner">
+    <div class="between"><h2 class="h2">Add to plan</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
+    <p><b>${esc(m.name)}</b> · ${esc(m.sr)}</p>
+    <div class="field"><span>Whose plan</span>${segA("who", [["mat", "Mat"], ["benny", "Benny"], ["both", "Both"]])}</div>
+    <div class="field"><span>Week</span>${segA("week", [["A", "Week A"], ["B", "Week B"], ["AB", "Both weeks"]])}</div>
+    <div class="field"><span>Day</span><div class="chips">${DAYS.map(d => `<button data-act="apSet" data-k="day" data-v="${d}" aria-pressed="${a.day === d}">${d}<small>${esc(PLAN.A[d].title.split(",")[0])}</small></button>`).join("")}</div></div>
+    <button class="btn primary block" data-act="apSave">Add to plan</button>
+  </div></div>`;
+}
+function saveAddPlan() {
+  const a = state.addPlan; const id = `lib-${a.libId}`;
+  const users = a.who === "both" ? ["mat", "benny"] : [a.who]; const weeks = a.week === "AB" ? ["A", "B"] : [a.week];
+  editPlan(users, weeks, a.day, d => { if (!d.add.includes(id)) d.add.push(id); });
+  toast(`Added to ${a.who === "both" ? "both plans" : PROFILES[a.who].name + "'s plan"}: ${a.week === "AB" ? "Weeks A and B" : "Week " + a.week} ${DAY_NAMES[a.day]}.`);
+  state.addPlan = null; closeOverlay(); render();
 }
 
 // ---------------------------------------------------------------- PROGRESS
@@ -654,7 +830,7 @@ function afterRender() {
 // ---------------------------------------------------------------- overlays: rest timer & settings
 let tick, audio, wake;
 function openTimer(exId) {
-  const ex = ALL_EX[exId] || exDef(exId);
+  const ex = ALL_EX[exId] || resolveEx(exId, {});
   state.overlay = "timer";
   state.timer = { ex, total: store.get("twp-rest", 90), left: store.get("twp-rest", 90), running: false, endAt: 0, done: false };
   drawTimer();
@@ -848,16 +1024,38 @@ document.addEventListener("click", e => {
       putDraft(u, date, id, { variant: v, ...prefillSets(u, { sr: def.sr, kind: def.kind }, id, v) });
       closeOverlay(); render(); setTimeout(() => document.getElementById(`ex-${id}`)?.scrollIntoView({ block: "center" }), 50); break;
     }
-    case "libFilter": state.libFilter = v; render(); break;
+    case "libF": { state.libF[el.dataset.k] = el.dataset.v; store.set("twp-libf", state.libF); render(); break; }
     case "libFocus": el.setAttribute("aria-pressed", el.getAttribute("aria-pressed") !== "true"); break;
+    case "ache": {
+      const u = state.viewUser; const a = new Set(aches(u)); a.has(el.dataset.v) ? a.delete(el.dataset.v) : a.add(el.dataset.v);
+      save("settings", `aches_${u}`, { areas: [...a] }); break;
+    }
+    case "libNew": state.libEdit = "new"; render(); setTimeout(() => $("#lib-form")?.scrollIntoView({ block: "start" }), 30); break;
     case "libSave": saveLibrary(); break;
     case "libEdit": state.libEdit = el.dataset.id; render(); setTimeout(() => $("#lib-form")?.scrollIntoView({ block: "start" }), 30); break;
     case "libCancel": state.libEdit = null; render(); break;
     case "libDelete": {
-      if (state.confirmDel !== el.dataset.id) { state.confirmDel = el.dataset.id; render(); break; }
-      remove("library", el.dataset.id); state.confirmDel = null; state.libEdit = null; toast("Removed from the library."); break;
+      const id = el.dataset.id; const m = libItem(id);
+      if (state.confirmDel !== id) { state.confirmDel = id; render(); break; }
+      state.confirmDel = null; state.libEdit = null;
+      if (m?.builtin) save("library", id, { hidden: true }); else remove("library", id);
+      toast(m?.builtin ? "Hidden. Restore it from the bottom of the Gym tab." : "Deleted."); break;
     }
-    case "libQuick": { const ex = ALL_EX[el.dataset.id]; save("library", slug(ex.n), { name: ex.n, focus: ex.focus.filter(f => GROUPS.includes(f)), equip: guessEquip(ex.n), kind: ex.kind, db: ex.db, notes: "" }); toast(`Added ${ex.n}.`); break; }
+    case "libRestore": remove("library", el.dataset.id); toast("Restored."); break;
+    case "libQuick": { const ex = ALL_EX[el.dataset.id]; save("library", slug(ex.n), { name: ex.n, focus: ex.focus.filter(f => GROUPS.includes(f)), equip: guessEquip(ex.n), pattern: PLAN_PATTERN[ex.id] || "", kind: ex.kind, db: ex.db, sr: ex.sr, how: ex.setup, notes: "" }); toast(`Added ${ex.n}.`); break; }
+    case "libToday": { const m = libItem(el.dataset.id); addExtra({ id: `lib-${m.id}`, name: m.name, kind: m.kind || "load", db: !!m.db, focus: m.focus || [] }); state.view = "today"; store.set("twp-view", "today"); render(); break; }
+    case "libPlan": openAddPlan(el.dataset.id); break;
+    case "apSet": state.addPlan[el.dataset.k] = el.dataset.v; drawAddPlan(); break;
+    case "apSave": saveAddPlan(); break;
+    case "apCancel": state.addPlan = null; render(); break;
+    case "planEdit": state.planEdit = !state.planEdit; render(); break;
+    case "planRemove": {
+      const c = cardFor(el); const { week, day } = state.sel;
+      editPlan([c.u], [week], day, d => { if (c.id.startsWith("lib-") && d.add.includes(c.id)) d.add = d.add.filter(x => x !== c.id); else if (!d.remove.includes(c.id)) d.remove.push(c.id); });
+      toast(`Removed from ${PROFILES[c.u].name}'s plan.`); break;
+    }
+    case "planRestore": { const { week, day } = state.sel; editPlan([LU()], [week], day, d => { d.remove = d.remove.filter(x => x !== el.dataset.id); }); break; }
+    case "planFromLib": state.addPlan = { who: LU(), week: state.sel.week, day: state.sel.day }; go("gym"); toast("Tap Add to plan on any exercise."); break;
     case "pickLib": { const m = libItem(el.dataset.id); if (m) addExtra({ id: `lib-${m.id}`, name: m.name, kind: m.kind || "load", db: !!m.db, focus: m.focus || [] }); break; }
     case "pickEx": { const ex = ALL_EX[el.dataset.id]; if (ex) addExtra({ id: ex.id, name: ex.n, kind: ex.kind, db: ex.db }); else { const found = state.data.sessions.flatMap(s => s.exercises || []).find(x => x.id === el.dataset.id); if (found) addExtra({ id: found.id, name: found.name, kind: found.kind, db: !!found.db }); } break; }
     case "addCustom": {
@@ -865,7 +1063,7 @@ document.addEventListener("click", e => {
       const kind = $("#cx-kind").value, db = $("#cx-db").checked;
       if ($("#cx-lib").checked) {
         const focus = [...document.querySelectorAll("#cx-focus [aria-pressed=true]")].map(b => b.dataset.v);
-        save("library", slug(name), { name, focus, equip: guessEquip(name), kind, db, notes: "" });
+        save("library", slug(name), { name, focus, equip: guessEquip(name), pattern: "", kind, db, notes: "", sr: "3 × 10" });
         addExtra({ id: `lib-${slug(name)}`, name, kind, db, focus });
       } else addExtra({ id: `custom-${slug(name)}`, name, kind, db });
       break;
@@ -933,6 +1131,9 @@ document.addEventListener("input", e => {
     const k = checkinDraft(); const f = el.dataset.kf;
     if (f === "notes") k.notes = el.value; else { k.pain[f.slice(5)] = +el.value; const out = document.querySelector(`[data-out="${f}"]`); if (out) out.textContent = el.value; }
     store.set(`twp-k-${LU()}-${LD()}`, k);
+  } else if (el.dataset.act === "libQ") {
+    state.libF.q = el.value; store.set("twp-libf", state.libF); const pos = el.selectionStart; render();
+    const q = $("#lib-q"); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
   } else if (el.dataset.act === "pickerQ") {
     state.pickerQ = el.value; const pos = el.selectionStart; drawPicker();
     const q = $("#picker-q"); q.focus(); q.setSelectionRange(pos, pos);
@@ -941,6 +1142,7 @@ document.addEventListener("input", e => {
 document.addEventListener("change", e => {
   const el = e.target; const act = el.dataset.act;
   if (act === "progEx") { state.progEx = el.value; render(); }
+  if (act === "libSel") { state.libF[el.dataset.k] = el.value; store.set("twp-libf", state.libF); render(); }
   if (act === "bodyField") { state.bodyField = el.value; render(); }
   if (act === "repCycle") { state.repCycle = +el.value; render(); }
   if (act === "cmpA") { state.cmpA = el.value; render(); }
