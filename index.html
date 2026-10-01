@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Two-Week Split">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;600&family=Orbitron:wght@600;800&family=Saira+Stencil+One&family=Press+Start+2P&family=Manrope:wght@400;600;800&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
 </head>
@@ -27,11 +27,11 @@
   </header>
   <main id="main"><p class="muted">Loading…</p></main>
   <nav class="tabs hidden" id="tabs" aria-label="Sections">
-    <button type="button" data-view="today"><span>◉</span>Workout</button>
-    <button type="button" data-view="progress"><span>↗</span>Progress</button>
-    <button type="button" data-view="body"><span>◐</span>Body</button>
-    <button type="button" data-view="report"><span>☰</span>Report</button>
-    <button type="button" data-view="gym"><span>▦</span>Gym</button>
+    <button type="button" data-view="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg><span></span>Workout</button>
+    <button type="button" data-view="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span></span>Progress</button>
+    <button type="button" data-view="body"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M7 10h10M12 10v5M12 15l-3 6M12 15l3 6"/></svg><span></span>Body</button>
+    <button type="button" data-view="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg><span></span>Report</button>
+    <button type="button" data-view="gym"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></svg><span></span>Gym</button>
   </nav>
   <div id="overlay"></div>
   <script type="module" src="js/app.js"></script>

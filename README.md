@@ -5,16 +5,22 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 ## What it does
 
 **At the gym (Workout tab)**
-- Today's plan for each person, with Standard, Harder and Swap versions of every exercise. Each version has instructions and form videos.
-- Log sets right on the exercise card: weight, reps, and how each set felt (Easy / Right / Hard), pre-filled from last time. Changing set 1 fills the sets after it.
-- **Save exercise** after each one. It checks off and stays filled in for the day; tap Log to change it.
-- **+ Add an exercise**: anything from the plan, the gym library, or a new machine.
-- **Library** swap: pick a machine from the gym library that works the same areas as the planned exercise.
-- Cardio (with Mat's bike commute) and the check-in (pain, sleep, energy, soreness, notes) each save on their own.
-- "Last time" numbers and automatic weight-bump prompts.
-- A rest timer that shows the between-set stretches for the exercise, then buzzes and beeps.
-- Partner mode: one phone logs both people.
-- Works offline once installed. Anything logged without signal syncs later.
+- Today's plan with Standard, Harder, Swap and Library versions of every exercise, each with instructions, form videos, joint load and specific injury risks.
+- Start workout → timer → Finish workout, with a summary: time, sets, pounds moved, personal bests.
+- Warm-up for each day, with ramp-up sets for the first lift worked out from your weights.
+- Log sets right on the card, pre-filled from last time. Save each exercise as you finish it.
+- Superset ideas that pair exercises using different muscles and equipment.
+- Lighter weeks: suggested after 6 weeks or when lots of sets feel hard; pre-fills about 60% weight and one less set.
+- Weight steps match the gym: small dumbbell steps up to a set weight, then 5 lb (Settings → Our gym). Smith bar weight noted on Smith exercises.
+- Sore spots flag exercises that load what hurts today.
+- Edit any day's plan: reorder, change targets, rename the day, clear it, copy it to your partner, add from the library, reset.
+- Reminders for weigh-ins, measurements, resting heart rate and the end-of-cycle report.
+- Rest timer with stretches, partner mode, offline support.
+
+**Make it yours (Settings)**
+- Profiles for anyone, set up in the app: goals, focus areas, aches to track, default version, cardio style, bike commute.
+- Themes: Gym Floor, Synthwave, Iron & Chalk, Arcade, Clean Light. Accent color, text size, avatar.
+- Personality: Hype, Chill or Just the numbers. Fun level: Light (record celebrations, badges), Medium (+ streaks, progress ring, finish screen, high-fives), Full (+ points, levels, weekly leaderboard).
 
 **Gym library (Gym tab)**
 - 56 built-in dumbbell exercises (in `js/library.js`), plus anything you add. Machines get added here later.
@@ -37,6 +43,8 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | --- | --- |
 | `js/plan.js` | The exercises, profiles, stretches, and cardio program. Edit this to change the plan. |
 | `js/library.js` | The built-in exercise library and its tags. |
+| `js/safety.js` | Joint load and injury risks for plan exercises. |
+| `js/fun.js` | Voice lines, celebrations, badges, streaks, points. |
 | `js/stats.js` | Progress math: best sets, weight-bump rules, reports. |
 | `js/app.js` | Screens and buttons. |
 | `js/firebase.js` | Database connection and Firebase config. |

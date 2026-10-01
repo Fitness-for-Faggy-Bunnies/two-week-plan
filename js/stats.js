@@ -1,5 +1,7 @@
 // Pure calculation helpers. No DOM, no Firebase — testable in Node.
-import { ALL_EX, PROFILES, FOCUS, PAIN_AREAS, variantDef, exDef } from "./plan.js";
+import { ALL_EX, PROFILES, FOCUS, PAIN_AREAS, variantDef } from "./plan.js";
+let getProfile = id => PROFILES[id];
+export const setProfileSource = fn => { getProfile = fn; };
 
 // Definition for a logged entry (plan exercise or one added by hand).
 export function defFor(id, variant, entry = {}) {
@@ -220,7 +222,7 @@ export function cycleReport({ sessions, body, activities, user, start, end, toda
     else if (betterThan(def.kind, inCycle?.score, before.score)) up.push(row);
     else stalled.push(row);
   }
-  const areas = PROFILES[user].pain;
+  const areas = getProfile(user).pain;
   const pain = {};
   for (const a of areas) {
     const vals = mine.map(s => s.pain?.[a]).filter(v => v != null && v !== "");
@@ -270,7 +272,7 @@ export function setsText(e) {
   return `${sets.length} set${sets.length === 1 ? "" : "s"}: ${vals} ${u.w || u.r} (${felt})`;
 }
 export function reportText(r) {
-  const p = PROFILES[r.user];
+  const p = getProfile(r.user);
   const L = [];
   L.push(`Two-Week Split — end-of-cycle report for ${p.name}`);
   L.push(`Cycle: ${r.start} to ${r.end}. Goals: ${p.focusNote}`);

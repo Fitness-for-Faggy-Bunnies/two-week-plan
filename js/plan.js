@@ -41,7 +41,7 @@ export const FOCUS = {
   full: "Full body", cardio: "Cardio"
 };
 
-export const PAIN_AREAS = { foot: "Foot", knees: "Knees", shoulders: "Shoulders", lowerBack: "Lower back" };
+export const PAIN_AREAS = { foot: "Foot", knees: "Knees", shoulders: "Shoulders", lowerBack: "Lower back", neck: "Neck", elbows: "Elbows", wrists: "Wrists", hips: "Hips", ankles: "Ankles" };
 
 export const STRETCH = {
   chest:{n:"Chest Opener",t:"20–30 sec per side",h:"Stand tall beside a machine. Put your hand on it at shoulder height, elbow slightly bent, and slowly turn your body away until your chest stretches."},
