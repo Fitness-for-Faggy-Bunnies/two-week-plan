@@ -342,3 +342,29 @@ body[data-skin="clean"] h1,body[data-skin="clean"] .h2,body[data-skin="clean"] .
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}
 .or::before,.or::after{content:"";flex:1;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion: reduce){.hi5-burst{animation:none;opacity:0}.ring-svg .fg{transition:none}}
+
+/* brand */
+.brand-mark{height:1.15em;width:auto;vertical-align:-.15em;margin-right:8px}
+.brand-logo{display:grid;justify-items:center;margin:0 auto}
+.brand-logo img{width:min(320px,80vw);height:auto}
+.brand-logo.small img{width:min(220px,60vw)}
+.brand-logo .on-dark{display:none}
+body[data-tone="dark"] .brand-logo .on-light{display:none}
+body[data-tone="dark"] .brand-logo .on-dark{display:block}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* --- Bunny: the logo's charcoal and hot pink, with its serif */
+body[data-skin="bunny"]{
+  --bg:#2d2b2b; --surface:#383535; --inset:#433f3f; --ink:#f5f0f2; --muted:#c3b8bd; --line:#4d4848;
+  --accent:#ff6fc0; --plate:#ff9fd0; --plate-soft:rgb(251 64 173 / .14); --good:#6fd6a2; --good-soft:rgb(111 214 162 / .14); --warn:#ffcf6b; --warn-soft:rgb(255 207 107 / .14); --bad:#ff7a8a;
+  --display:"EB Garamond",Garamond,Georgia,serif; --radius:18px; --card-shadow:0 1px 0 rgb(255 255 255 / .03) inset;
+  --on-accent:#2d2b2b; color-scheme:dark; background:#2d2b2b;
+}
+body[data-skin="bunny"] h1,body[data-skin="bunny"] .h2,body[data-skin="bunny"] .h3,body[data-skin="bunny"] .pick h2,body[data-skin="bunny"] .signin h2{font-style:italic;text-transform:none;letter-spacing:0;font-weight:700}
+body[data-skin="bunny"] .h2{font-size:1.9rem}
+body[data-skin="bunny"] .h3{font-size:1.35rem}
+body[data-skin="bunny"] .eyebrow{letter-spacing:.3em;font-style:italic;font-family:var(--display);font-size:.85rem;text-transform:uppercase}
+body[data-skin="bunny"] .card{border-color:#433f3f}
+body[data-skin="bunny"] .done-card{border-color:var(--accent)}
+body[data-skin="bunny"] .btn.primary{font-weight:700}
+body[data-skin="bunny"] .h2::after{content:"";display:block;width:56px;height:2px;background:#fb40ad;margin-top:6px}

@@ -18,7 +18,7 @@ const store = {
 const TODAY = () => S.ymd(new Date());
 // ---------------------------------------------------------------- profiles (built-in Mat & Benny + anyone set up in the app)
 const PROFILE_DEFAULTS = { focus: [], focusNote: "", defaultVariant: "std", pain: ["knees", "shoulders", "lowerBack"], commute: { enabled: false, miles: 0 }, start: {}, notes: [],
-  cardio: "steady", theme: "floor", accent: "", textSize: "m", avatar: "", voice: "hype", fun: "medium", sound: true, color: "#2f6b5e" };
+  cardio: "steady", theme: "bunny", accent: "", textSize: "m", avatar: "", voice: "hype", fun: "medium", sound: true, color: "#2f6b5e" };
 const SEED_EXTRA = { mat: { cardio: "steady", color: "#2f6b5e", avatar: "🐺" }, benny: { cardio: "intervals", color: "#4b5d8a", avatar: "🦊" } };
 let profMemo = { src: null, map: {} };
 function P(id) {
@@ -229,7 +229,7 @@ function render() {
   applyAppearance();
   if (!state.user) {
     $("#tabs").classList.add("hidden"); $("#who").classList.add("hidden");
-    main.innerHTML = `<section class="pick"><h2>Who's training?</h2>
+    main.innerHTML = `<section class="pick">${logoHtml("small")}<h2>Who's training?</h2>
       <div class="pick-people">${profileIds().map(id => `<button class="btn person" data-act="pickUser" data-u="${id}">${avatarHtml(id, true)}<span>${esc(P(id).name)}</span></button>`).join("")}</div>
       <button class="btn" data-act="newProfile">+ New person</button>
       ${isOwner() && !state.data.sessions.length ? `<button class="btn small" data-act="legacyQuick">Bring over data from the first version</button>` : ""}
@@ -677,6 +677,7 @@ function saveAddPlan() {
 
 // ---------------------------------------------------------------- appearance
 const THEMES = {
+  bunny: { name: "Bunny", desc: "Our logo colors: charcoal and hot pink.", sw: ["#2d2b2b", "#fb40ad", "#f5f0f2"] },
   floor: { name: "Gym Floor", desc: "The original. Follows light/dark.", sw: ["#eceee9", "#2f6b5e", "#b5532f"] },
   synthwave: { name: "Synthwave", desc: "Neon night drive.", sw: ["#1b0633", "#ff3fd8", "#3ff6ff"] },
   iron: { name: "Iron & Chalk", desc: "Rubber floor, plate colors.", sw: ["#18191b", "#d9412f", "#e3b23c"] },
@@ -689,12 +690,16 @@ const funAt = (lvl, u = state.user) => ({ light: 1, medium: 2, full: 3 })[P(u).f
 
 function applyAppearance() {
   const p = state.user ? P(state.user) : null; const b = document.body;
-  b.dataset.skin = p?.theme && THEMES[p.theme] ? p.theme : "floor";
+  b.dataset.skin = p?.theme && THEMES[p.theme] ? p.theme : "bunny";
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   const acc = p ? (p.accent || (b.dataset.skin === "floor" ? (dark ? `color-mix(in srgb, ${p.color} 55%, #ffffff)` : p.color) : "")) : "";
   if (acc) b.style.setProperty("--accent", acc); else b.style.removeProperty("--accent");
   document.documentElement.style.fontSize = ({ s: "15px", m: "16px", l: "18px", xl: "20px" })[p?.textSize || "m"] || "16px";
   const bg = getComputedStyle(b).getPropertyValue("--bg").trim();
+  // Light or dark page, so the logo with the right text color shows.
+  const probe = document.createElement("i"); probe.style.color = "var(--bg)"; b.appendChild(probe);
+  const [r, g, bl] = (getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0]).map(Number); probe.remove();
+  b.dataset.tone = (0.299 * r + 0.587 * g + 0.114 * bl) > 140 ? "light" : "dark";
   document.querySelector("meta[name=theme-color]")?.setAttribute("content", bg.startsWith("#") ? bg : "#12181a");
 }
 function avatarHtml(id, big) {
@@ -944,7 +949,7 @@ function openSettings() {
       ${profileIds().length > 1 ? `<label class="check"><input type="checkbox" data-act="partner" ${state.partner ? "checked" : ""}><span>Partner mode: log for a partner from this phone</span></label>` : ""}
       ${profileIds().length > 2 ? `<div class="field"><span>Training partner</span>${one("pickPartner", other(u), profileIds().filter(id => id !== u).map(id => [id, P(id).name]))}</div>` : ""}</section>
     <section class="card"><h3 class="h3">Look</h3>
-      <div class="themes">${Object.entries(THEMES).map(([k, t]) => `<button type="button" class="theme-tile" data-act="setTheme" data-v="${k}" aria-pressed="${(p.theme || "floor") === k}"><div class="sw" style="background:${t.sw[0]}"><i style="background:${t.sw[1]}"></i><i style="background:${t.sw[2]}"></i></div><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
+      <div class="themes">${Object.entries(THEMES).map(([k, t]) => `<button type="button" class="theme-tile" data-act="setTheme" data-v="${k}" aria-pressed="${(p.theme || "bunny") === k}"><div class="sw" style="background:${t.sw[0]}"><i style="background:${t.sw[1]}"></i><i style="background:${t.sw[2]}"></i></div><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
       <div class="grid2"><label class="field">Accent color<input type="color" data-act="setAccent" value="${esc(p.accent || cssVar("--accent") || "#2f6b5e")}"></label>
       <div class="field"><span>&nbsp;</span><button class="btn small" data-act="resetAccent">Use the theme's color</button></div></div>
       <div class="field"><span>Text size</span>${one("setText", p.textSize || "m", [["s", "Small"], ["m", "Normal"], ["l", "Large"], ["xl", "Extra large"]])}</div></section>
@@ -1421,9 +1426,9 @@ document.addEventListener("click", e => {
     case "copyCode": { const c = state.auth.crew?.code || ""; navigator.clipboard?.writeText(c).then(() => toast("Invite code copied."), () => toast(c)); break; }
     case "newCode": newInviteCode(state.auth.crewId, state.auth.crew?.code).then(c => { toast(`New code: ${c}. The old one no longer works.`); openSettings(); }, e => toast(e.message)); break;
     case "crewRemove": { const uid = el.dataset.v; if (state.confirmDel !== uid) { state.confirmDel = uid; openSettings(); break; } state.confirmDel = null; removeMember(state.auth.crewId, uid).then(() => { toast("Removed from the crew."); openSettings(); }, e => toast(e.message)); break; }
-    case "legacyQuick": readLegacy().then(r => r.count ? importAll(r.data).then(n => toast(`Copied ${n} items into the crew.`)) : toast("No old data found. Is the TEMPORARY rule still published?"), e => toast(e.message)); break;
+    case "legacyQuick": readLegacy().then(r => r.count ? importAll(r.data).then(n => toast(`Copied ${n} item${n === 1 ? "" : "s"} into the crew.`)) : toast("No old data found. Is the TEMPORARY rule still published?"), e => toast(e.message)); break;
     case "legacyCheck": readLegacy().then(r => { state.auth.legacy = r; if (!r.count) toast("No old data found (or the temporary rule isn't published)."); openSettings(); }); break;
-    case "legacyCopy": { const r = state.auth.legacy; importAll(r.data).then(n => { toast(`Copied ${n} items into the crew.`); state.auth.legacy = null; openSettings(); }, e => toast(e.message)); break; }
+    case "legacyCopy": { const r = state.auth.legacy; importAll(r.data).then(n => { toast(`Copied ${n} item${n === 1 ? "" : "s"} into the crew.`); state.auth.legacy = null; openSettings(); }, e => toast(e.message)); break; }
     case "linkGoogle": addGoogle().then(() => { state.auth.user = currentInfo(); toast("Google sign-in added."); openSettings(); }, e => toast(e.message)); break;
     case "linkPassword": { const pw = $("#link-pw").value; if (pw.length < 6) { toast("Use at least 6 characters."); break; } addPassword(pw).then(() => { state.auth.user = currentInfo(); toast("Password added."); openSettings(); }, e => toast(e.message)); break; }
     case "pickUser": if (state.auth.crewId && state.auth.user && (!me()?.profileId || me()?.profileId !== el.dataset.u) && !state.partner) updateMember(state.auth.crewId, state.auth.user.uid, { profileId: el.dataset.u }).catch(() => {});
@@ -1690,7 +1695,7 @@ async function busy(fn) {
 function viewSignIn() {
   const a = state.auth; const create = a.mode === "create";
   return `<section class="signin">
-    <h2>Two-Week Split</h2>
+    ${logoHtml()}<h2 class="visually-hidden">Two-Week Split</h2>
     <p class="muted">Sign in to see your crew's workouts on any phone.</p>
     ${a.error ? `<div class="banner" role="alert">${esc(a.error)}</div>` : ""}
     ${a.notice ? `<div class="reminders">${esc(a.notice)}</div>` : ""}
@@ -1709,6 +1714,9 @@ function viewSignIn() {
     <details class="more" style="text-align:left"><summary>Forgot which email you used?</summary><div class="panel small">
       <p>Try Continue with Google first. If that's not it, ask someone in your crew: Settings → Crew lists everyone's sign-in email.</p></div></details>
   </section>`;
+}
+function logoHtml(size = "") {
+  return `<div class="brand-logo ${size}"><img class="on-light" src="icons/logo-dark-text.png" alt="Fitness for Faggy Bunnies"><img class="on-dark" src="icons/logo-light-text.png" alt="Fitness for Faggy Bunnies"></div>`;
 }
 function viewCrewSetup() {
   const a = state.auth;

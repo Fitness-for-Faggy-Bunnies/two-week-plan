@@ -19,7 +19,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 
 **Make it yours (Settings)**
 - Profiles for anyone, set up in the app: goals, focus areas, aches to track, default version, cardio style, bike commute.
-- Themes: Gym Floor, Synthwave, Iron & Chalk, Arcade, Clean Light. Accent color, text size, avatar.
+- Themes: Bunny (the logo's charcoal and pink, default), Gym Floor, Synthwave, Iron & Chalk, Arcade, Clean Light. Accent color, text size, avatar.
 - Personality: Hype, Chill or Just the numbers. Fun level: Light (record celebrations, badges), Medium (+ streaks, progress ring, finish screen, high-fives), Full (+ points, levels, weekly leaderboard).
 
 **Gym library (Gym tab)**
