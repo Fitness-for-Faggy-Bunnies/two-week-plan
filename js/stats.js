@@ -1,5 +1,10 @@
 // Pure calculation helpers. No DOM, no Firebase — testable in Node.
-import { ALL_EX, PROFILES, FOCUS, PAIN_AREAS, variantDef } from "./plan.js";
+import { ALL_EX, PROFILES, FOCUS, PAIN_AREAS, variantDef, exDef } from "./plan.js";
+
+// Definition for a logged entry (plan exercise or one added by hand).
+export function defFor(id, variant, entry = {}) {
+  return ALL_EX[id] ? variantDef(ALL_EX[id], variant) : { name: entry.name || id, sr: "", kind: entry.kind || "load", db: !!entry.db, q: entry.name || id };
+}
 
 export const STEP = 5; // lb increment for weight-bump suggestions
 
@@ -108,6 +113,8 @@ export function suggestion(sessions, user, exId, variant) {
   const topW = Math.max(0, ...last.sets.map(s => s.w || 0));
   const each = def.db ? " each" : "";
   const hitTop = e => max != null && e.sets.length > 0 && e.sets.every(s => (s.r || 0) >= max);
+  const wayOver = max != null && last.sets.length > 0 && last.sets.every(s => (s.r || 0) >= max + 4) && (def.kind === "load" || def.kind === "carry");
+  if (wayOver) return { type: "up", text: `${Math.min(...last.sets.map(s => s.r || 0))}+ reps on every set is well past the ${max}-rep target, so this weight is too light. Try ${topW + STEP * 2} lb${each} next time.` };
   if (h.length === 2 && hitTop(h[0]) && hitTop(h[1])) {
     switch (def.kind) {
       case "load": return { type: "up", text: `You hit ${max}+ reps on every set twice. Try ${topW + STEP} lb${each} next time.` };
@@ -189,19 +196,25 @@ export function cardioTotals(sessions, activities, user, from, to) {
 }
 
 // ---- end-of-cycle report -------------------------------------------------
-export function cycleReport({ sessions, body, activities, user, start, end }) {
-  const mine = userSessions(sessions, user).filter(s => s.date >= start && s.date <= end);
+export function workoutDaysBetween(from, to) {
+  let n = 0; for (let d = from; d <= to; d = addDays(d, 1)) { const dow = parseYmd(d).getDay(); if (dow >= 1 && dow <= 4) n++; }
+  return n;
+}
+export function cycleReport({ sessions, body, activities, user, start, end, today }) {
+  const mine = userSessions(sessions, user).filter(s => s.date >= start && s.date <= end && (s.exercises || []).some(e => !e.skipped && e.sets?.length));
+  const days = [...new Set(mine.map(s => s.date))];
+  const soFar = workoutDaysBetween(start, today && today < end ? today : end);
   const exIds = [...new Set(mine.flatMap(s => (s.exercises || []).filter(e => !e.skipped).map(e => `${e.id}|${e.variant || "std"}`)))];
   const up = [], stalled = [], newEx = [];
   for (const key of exIds) {
     const [id, variant] = key.split("|");
-    const ex = ALL_EX[id]; if (!ex) continue;
-    const def = variantDef(ex, variant);
+    const hist0 = exHistory(sessions, user, id, variant);
+    const def = defFor(id, variant, hist0[hist0.length - 1]);
     const before = personalBest(sessions, user, id, variant, addDays(start, -1));
     const hist = exHistory(sessions, user, id, variant).filter(e => e.date >= start && e.date <= end);
     let inCycle = null; for (const e of hist) if (betterThan(e.kind, e.score, inCycle?.score)) inCycle = e;
     const last = hist[hist.length - 1];
-    const row = { id, variant, name: def.name, kind: def.kind, db: def.db, top: topSetText(last.kind, last.db, last.sets), before: before ? topSetText(before.kind, before.db, before.sets) : null, times: hist.length };
+    const row = { id, variant, name: def.name, kind: def.kind, db: def.db, top: topSetText(last.kind, last.db, last.sets), sets: setsText(last), before: before ? topSetText(before.kind, before.db, before.sets) : null, times: hist.length };
     if (!before) newEx.push(row);
     else if (betterThan(def.kind, inCycle?.score, before.score)) up.push(row);
     else stalled.push(row);
@@ -229,8 +242,15 @@ export function cycleReport({ sessions, body, activities, user, start, end }) {
     const v = mine.map(s => s.recovery?.[k]).filter(Boolean).map(Number);
     rec[k] = v.length ? +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : null;
   }
+  const detail = days.map(d => {
+    const ss = mine.filter(s => s.date === d); const s0 = ss[0];
+    const seen = new Set(); const exs = [];
+    for (const s of ss) for (const e of s.exercises || []) { if (e.skipped || !e.sets?.length || seen.has(e.id + e.variant)) continue; seen.add(e.id + e.variant); exs.push(e); }
+    const cardio = ss.map(s => s.cardio).find(c => c?.done);
+    return { date: d, week: s0.week, day: s0.day, exercises: exs, cardio, notes: ss.map(s => s.notes).filter(Boolean).join(" ") };
+  });
   return {
-    user, start, end, sessions: mine.length, planned: 8,
+    user, start, end, sessions: days.length, planned: 8, soFar, detail, today,
     up, stalled, newEx, pain, painDays, diff, bodyChange, recovery: rec,
     cardio: cardioTotals(sessions, activities, user, start, end),
     notes: mine.filter(s => s.notes).map(s => `${s.date}: ${s.notes}`)
@@ -241,16 +261,32 @@ function firstIn(body, user, f, start, end) {
   return xs.length ? { value: +xs[0][f], date: xs[0].date } : null;
 }
 
+// "3 sets: 35×12, 35×12, 35×10 lb (R R H)"
+export function setsText(e) {
+  const sets = e.sets || []; const u = unitLabel(e.kind, e.db);
+  const vals = sets.map(s => (u.w ? `${s.w || 0}×${s.r || 0}` : `${s.r || 0}`)).join(", ");
+  const felt = sets.map(s => ["", "E", "R", "H"][s.d || 2]).join(" ");
+  return `${sets.length} set${sets.length === 1 ? "" : "s"}: ${vals} ${u.w || u.r} (${felt})`;
+}
 export function reportText(r) {
   const p = PROFILES[r.user];
   const L = [];
   L.push(`Two-Week Split — end-of-cycle report for ${p.name}`);
   L.push(`Cycle: ${r.start} to ${r.end}. Goals: ${p.focusNote}`);
-  L.push(`Workouts logged: ${r.sessions} of ${r.planned} planned.`);
+  const inProgress = r.today && r.today < r.end;
+  L.push(inProgress ? `Cycle in progress. Workout days logged: ${r.sessions} of ${r.soFar} so far (${r.planned} in the full cycle).` : `Workout days logged: ${r.sessions} of ${r.planned}.`);
   L.push("");
-  L.push("WENT UP:"); r.up.length ? r.up.forEach(x => L.push(`- ${x.name}: ${x.before} → ${x.top}`)) : L.push("- none");
-  L.push("STALLED (no new best this cycle):"); r.stalled.length ? r.stalled.forEach(x => L.push(`- ${x.name}: best before ${x.before}, latest ${x.top} (${x.times}x this cycle)`)) : L.push("- none");
-  if (r.newEx.length) { L.push("FIRST TIME LOGGED:"); r.newEx.forEach(x => L.push(`- ${x.name}: ${x.top}`)); }
+  L.push("WENT UP:"); r.up.length ? r.up.forEach(x => L.push(`- ${x.name}: best before ${x.before}, now ${x.sets}`)) : L.push("- none");
+  L.push("STALLED (no new best this cycle):"); r.stalled.length ? r.stalled.forEach(x => L.push(`- ${x.name}: best before ${x.before}, latest ${x.sets}`)) : L.push("- none");
+  if (r.newEx.length) { L.push("FIRST TIME LOGGED:"); r.newEx.forEach(x => L.push(`- ${x.name}: ${x.sets}`)); }
+  L.push("");
+  L.push("EVERY WORKOUT THIS CYCLE (weight × reps per set, felt E/R/H = easy/right/hard):");
+  for (const d of r.detail) {
+    L.push(`${d.date} — Week ${d.week} ${d.day}:`);
+    for (const e of d.exercises) L.push(`- ${e.name}${e.variant === "hard" ? " (harder)" : e.variant === "swap" ? " (swap)" : e.added ? " (added)" : ""}: ${setsText(e)}`);
+    if (d.cardio) L.push(`- Cardio: ${d.cardio.type || "?"}, ${d.cardio.minutes || 0} min${d.cardio.miles ? `, ${d.cardio.miles} mi` : ""}${d.cardio.avgHr ? `, avg HR ${d.cardio.avgHr}` : ""}${d.cardio.hiit ? ", intervals" : ""}`);
+    if (d.notes) L.push(`- Notes: ${d.notes}`);
+  }
   L.push("");
   L.push("PAIN (0–10, average / max):");
   Object.entries(r.pain).forEach(([a, v]) => L.push(`- ${PAIN_AREAS[a]}: ${v ? `${v.avg} / ${v.max}` : "not logged"}`));
@@ -264,7 +300,6 @@ export function reportText(r) {
   if (bc.length) { L.push("Body changes:"); bc.forEach(([f, v]) => L.push(`- ${BODY_FIELDS[f].label}: ${v.from} → ${v.to} ${BODY_FIELDS[f].unit} (${v.change > 0 ? "+" : ""}${v.change})`)); }
   const rc = r.recovery;
   if (rc.sleep || rc.energy || rc.soreness) L.push(`Recovery averages (1–5): sleep ${rc.sleep ?? "–"}, energy ${rc.energy ?? "–"}, soreness ${rc.soreness ?? "–"}.`);
-  if (r.notes.length) { L.push("Notes:"); r.notes.forEach(n => L.push(`- ${n}`)); }
   L.push("");
   L.push("Please suggest adjustments to my Two-Week Split for the next cycle based on this.");
   return L.join("\n");
@@ -279,8 +314,8 @@ export function compare({ sessions, body, activities, user, a, b }) {
   }).filter(Boolean);
   const keys = [...new Set(userSessions(sessions, user).flatMap(s => (s.exercises || []).filter(e => !e.skipped).map(e => `${e.id}|${e.variant || "std"}`)))];
   const lifts = keys.map(k => {
-    const [id, v] = k.split("|"); const ex = ALL_EX[id]; if (!ex) return null;
-    const def = variantDef(ex, v);
+    const [id, v] = k.split("|");
+    const hh = exHistory(sessions, user, id, v); const def = defFor(id, v, hh[hh.length - 1]);
     const x = personalBest(sessions, user, id, v, from), y = personalBest(sessions, user, id, v, to);
     if (!y) return null;
     const pct = x && x.score && y.score ? Math.round(((def.kind === "assist" ? x.score - y.score : y.score - x.score) / Math.abs(x.score)) * 100) : null;
