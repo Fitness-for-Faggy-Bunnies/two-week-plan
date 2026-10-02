@@ -544,3 +544,16 @@ body[data-motion="reduce"] #flash-alert.pulse{animation:none!important}
   .tmr-bar i,.sync::before,.cal .dots i{forced-color-adjust:none}
   .btn,.seg button,.chips button{border:1px solid ButtonText}
 }
+
+/* Collapsible exercise tiles */
+.ex-toggle{all:unset;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;width:100%;cursor:pointer;min-height:44px;font:inherit;color:inherit}
+.ex-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:6px}
+.ex-toggle .chev{width:10px;height:10px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);flex:none;margin:0 4px 0 2px;transition:transform .15s}
+.ex-toggle[aria-expanded="false"] .chev{transform:rotate(-45deg)}
+.ex.collapsed{padding-top:10px;padding-bottom:10px}
+.ex.collapsed .head{align-items:center}
+.ex-mini{color:var(--muted);margin:2px 0 0 22px}
+.ex-mini b{color:var(--ink)}
+.ex-all{justify-content:flex-end;margin:4px 0 -2px}
+.ex-all .small{margin-right:auto}
+body[data-contrast="high"] .ex-toggle .chev{border-color:#fff}

@@ -277,6 +277,7 @@ function viewToday() {
   const s = sessionFor(u, date);
   const list = todaysList(u, date);
   const done = list.filter(x => s?.exercises?.some(e => e.id === x.ex.id)).length;
+  state.nextUpId = list.find(x => !s?.exercises?.some(e => e.id === x.ex.id))?.ex.id || null;
   const notToday = date !== TODAY();
   const rem = notToday ? [] : reminders(u);
   const dl = deloadActive(u, date); const dlSug = notToday ? null : deloadSuggestion(u);
@@ -303,6 +304,7 @@ function viewToday() {
   ${warmupCard(u, date, s, list)}
   ${cardioCard(u, date, s)}
   ${supersetIdeas(u, date, list, s)}
+  ${list.length > 1 ? `<div class="ex-all row"><span class="small muted">${done} of ${list.length} exercises done</span><button class="btn small" data-act="exAll" data-v="1">Open all</button><button class="btn small" data-act="exAll" data-v="0">Close all</button></div>` : ""}
   ${list.map(({ ex, added }, i) => exerciseCard(u, date, ex, added, s, i, list.length)).join("")}
   <button class="btn block add-ex" data-act="openPicker">+ Add an exercise</button>
   ${checkinCard(u, date, s)}`}
@@ -316,7 +318,7 @@ function focusSteps(u, date, s, list) {
   const steps = [
     { name: "Warm-up", done: !!s?.warmup, html: () => warmupCard(u, date, s, list) },
     { name: "Cardio", done: !!(s?.cardio?.done || s?.cardio?.skipped), html: () => cardioCard(u, date, s) },
-    ...list.map(({ ex, added }, i) => ({ name: defOf(ex, variantOf(u, ex)).name, done: !!s?.exercises?.some(e => e.id === ex.id), html: () => exerciseCard(u, date, ex, added, s, i, list.length) })),
+    ...list.map(({ ex, added }, i) => ({ name: defOf(ex, variantOf(u, ex)).name, done: !!s?.exercises?.some(e => e.id === ex.id), html: () => exerciseCard(u, date, ex, added, s, i, list.length, { forceOpen: true }) })),
     { name: "Check-in", done: !!s?.checkin, html: () => checkinCard(u, date, s) }
   ];
   // After saving a step, go to the next unfinished step after it (then wrap around to any skipped ones).
@@ -336,7 +338,17 @@ function focusSteps(u, date, s, list) {
     <div class="focus-nav"><button class="btn" data-act="focusGo" data-n="${i - 1}" ${i === 0 ? "disabled" : ""}>← Back</button><button class="btn primary" data-act="focusGo" data-n="${i + 1}" ${i >= steps.length - 1 ? "disabled" : ""}>Next →</button></div>
     ${i >= 2 && i < steps.length - 1 ? `<button class="btn block add-ex" data-act="openPicker">+ Add an exercise</button>` : ""}`;
 }
-function exerciseCard(u, date, ex, added, s, idx = 0, count = 0) {
+// Collapsible tiles: the next exercise you haven't done opens by itself; tap any header to open or close it.
+// Your taps are remembered on this phone for the day. A tile with sets checked off or a timer running stays open.
+const openKey = (u, date) => `twp-open-${u}-${date}`;
+function isOpen(u, date, id, d, force) {
+  if (force || state.planEdit) return true;
+  const choice = store.get(openKey(u, date), {})[id];
+  if (choice !== undefined) return choice;
+  if (d.sets.some(x => x.done) || T.isActive(`set:${u}|${date}|${id}|${d.sets.findIndex(x => !x.done)}`)) return true;
+  return id === state.nextUpId;
+}
+function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) {
   const logged = s?.exercises?.find(e => e.id === ex.id);
   const ek = editKey(u, date, ex.id);
   if (logged && !state.editing.has(ek)) {
@@ -361,8 +373,18 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0) {
   const safety = lib || ex.lib || safetyFor(ex, v);
   const sore = safety ? conflicts(safety, u) : { high: [], some: [] };
   const smith = /smith/i.test(def.name) ? (gymSet().smithBar ? `Smith bar: ${gymSet().smithBar} lb. Log it the same way every time (with or without the bar).` : "Smith bar weight isn't set yet. Add it in Settings → Our gym once you check.") : "";
+  const tags = `${ex.custom || lib ? "" : ex.lib ? `<span class="tag orig">Library</span>` : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}`;
+  const open = isOpen(u, date, ex.id, d, cardOpts.forceOpen);
+  const checked = d.sets.filter(x => x.done).length;
+  const head = `<div class="head"><h3 class="name"><button type="button" class="ex-toggle" data-act="toggleEx" aria-expanded="${open}" aria-controls="exb-${ex.id}"><span class="chev" aria-hidden="true"></span><span>${esc(def.name)}</span>${tags}</button></h3><span class="sr">${esc(target || "")}</span></div>`;
+  if (!open) {
+    const tmr = T.isActive(`set:${u}|${date}|${ex.id}|${d.sets.findIndex(x => !x.done)}`);
+    return `<article class="card ex collapsed" id="ex-${ex.id}" data-ex="${ex.id}">${head}
+      <div class="ex-mini small">${checked ? `<b>${checked} of ${d.sets.length} sets checked</b> · ` : ""}${tmr ? "<b>⏱ Timer running</b> · " : ""}${last ? `Last time: ${esc(S.describeSets(last.kind, last.db, last.sets))}` : "No history yet"}${sore.high.length ? ` · <span class="warn-text">Hard on your ${esc(sore.high.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today</span>` : ""}</div>
+    </article>`;
+  }
   return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
-    <div class="head"><h3 class="name">${esc(def.name)}${ex.custom || lib ? "" : ex.lib ? `<span class="tag orig">Library</span>` : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}</h3><span class="sr">${esc(target || "")}</span></div>
+    ${head}<div class="ex-body" id="exb-${ex.id}">
     ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(sore.high.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today. Consider a swap.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(sore.some.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today.</div>` : ""}
     ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
@@ -383,7 +405,7 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0) {
       <label class="field" style="flex:1;min-width:120px">Target<input type="text" data-act="planSr" value="${esc(target)}"></label>
       <button class="btn small danger" data-act="planRemove">Remove</button></div></div>` : ""}
     ${ex.custom ? "" : `<details class="more"><summary>Form, video, risks &amp; stretches</summary>${exPanel(ex, safety)}</details>`}
-  </article>`;
+  </div></article>`;
 }
 
 function exPanel(ex, safety) {
@@ -1555,6 +1577,17 @@ document.addEventListener("click", e => {
     }
     case "focusGo": { const n = +el.dataset.n; if (n >= 0 && n < (state.focusCount || 99)) { state.focusStep = n; render(); scrollTo(0, 0); const h = $("#main .focus-head + * .name, #main .focus-head + * summary, #main .focus-head + * h3"); h?.setAttribute("tabindex", "-1"); h?.focus({ preventScroll: true }); A.announce(`Step ${n + 1}`); } break; }
     case "focusAll": state.focusAll = true; render(); break;
+    case "toggleEx": {
+      const card = el.closest("[data-ex]"); const u = LU(), date = LD(); const k = openKey(u, date);
+      const m = store.get(k, {}); const opening = el.getAttribute("aria-expanded") !== "true"; m[card.dataset.ex] = opening; store.set(k, m);
+      render(); A.announce(opening ? "Opened" : "Closed");
+      if (opening) $(`#ex-${CSS.escape(card.dataset.ex)}`)?.scrollIntoView({ block: "nearest", behavior: A.reduceMotion() ? "auto" : "smooth" });
+      break;
+    }
+    case "exAll": {
+      const u = LU(), date = LD(); const m = {}; todaysList(u, date).forEach(x => { m[x.ex.id] = v === "1"; }); store.set(openKey(u, date), m);
+      render(); A.announce(v === "1" ? "All exercises opened" : "All exercises closed"); break;
+    }
     case "focusBack": state.focusAll = false; state.focusStep = null; render(); break;
     case "readEx": {
       const c = cardFor(el); const v = c.d.variant; const def = defOf(c.ex, v);
@@ -1572,8 +1605,8 @@ document.addEventListener("click", e => {
     }
     case "delSet": { const c = cardFor(el); c.d.sets.splice(c.si, 1); putDraft(c.u, c.date, c.id, c.d); render(); break; }
     case "addSet": { const c = cardFor(el); c.d.sets.push({ ...(c.d.sets[c.d.sets.length - 1] || { w: 0, r: 10 }), d: 2, done: false }); putDraft(c.u, c.date, c.id, c.d); render(); break; }
-    case "saveEx": { const c = cardFor(el); saveExercise(c); focusSaved(); render(); break; }
-    case "editEx": { const u = LU(), date = LD(); state.editing.add(editKey(u, date, el.dataset.ex)); render(); break; }
+    case "saveEx": { const c = cardFor(el); saveExercise(c); { const k = openKey(c.u, c.date); const m = store.get(k, {}); delete m[c.id]; store.set(k, m); } focusSaved(); render(); break; }
+    case "editEx": { const u = LU(), date = LD(); state.editing.add(editKey(u, date, el.dataset.ex)); const k = openKey(u, date); store.set(k, { ...store.get(k, {}), [el.dataset.ex]: true }); render(); break; }
     case "cancelEdit": { const c = cardFor(el); store.del(dKey(c.u, c.date, c.id)); state.editing.delete(editKey(c.u, c.date, c.id)); render(); break; }
     case "deleteEx": {
       const c = cardFor(el); const k = editKey(c.u, c.date, c.id);

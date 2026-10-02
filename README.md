@@ -9,6 +9,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - Start workout → timer → Finish workout, with a summary: time, sets, pounds moved, personal bests.
 - Warm-up for each day, with ramp-up sets for the first lift worked out from your weights.
 - Log sets right on the card, pre-filled from last time. Save each exercise as you finish it.
+- Exercise tiles fold up to one line (name, target, last time). The next one you haven't done opens by itself; tap any header to open or close it, or use Open all / Close all.
 - Superset ideas that pair exercises using different muscles and equipment.
 - Lighter weeks: suggested after 6 weeks or when lots of sets feel hard; pre-fills about 60% weight and one less set.
 - Weight steps match the gym: small dumbbell steps up to a set weight, then 5 lb (Settings → Our gym). Smith bar weight noted on Smith exercises.
