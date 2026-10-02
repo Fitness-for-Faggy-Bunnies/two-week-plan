@@ -106,6 +106,12 @@ for (const e of Object.values(ALL_EX)) {
   for (const v of ["std", "hard", "swap"]) yes(`safety resolves ${e.id}/${v}`, safetyFor(e, v));
 }
 for (const f of Object.values(STRETCH_BY_FOCUS)) for (const k of f) yes(`focus stretch ${k}`, stretchKeys.has(k));
+// Every stretch says where you feel it and what it does; held stretches have a timer length that matches their label.
+for (const [k, st] of Object.entries(STRETCH)) {
+  yes(`stretch ${k} has feel + purpose`, st.f?.length > 20 && st.g?.length > 20);
+  const held = /sec/.test(st.t);
+  yes(`stretch ${k} timer matches label`, held ? st.sec > 0 && st.t.includes(String(st.sec)) : st.sec === 0);
+}
 const ids = new Set();
 for (const b of BUILTIN) {
   yes(`unique library id ${b.id}`, !ids.has(b.id)); ids.add(b.id);

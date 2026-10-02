@@ -1,6 +1,7 @@
 // Two-Week Split — app shell, views and events.
 import { PROFILES as SEEDS, PLAN, STRETCH, CARDIO, DAYS, DAY_NAMES, ALL_EX, FOCUS, PAIN_AREAS, variantDef, exDef } from "./plan.js";
 import * as F from "./fun.js";
+import * as T from "./timer.js";
 import { safetyFor } from "./safety.js";
 import * as S from "./stats.js";
 import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
@@ -191,7 +192,7 @@ function prefillSets(u, def, id, v, date = LD()) {
 function getDraft(u, date, ex, logged) {
   const k = dKey(u, date, ex.id); let d = store.get(k, null);
   if (d) return d;
-  if (logged) return { variant: logged.variant || "std", sets: logged.sets.map(s => ({ ...s })), fresh: false };
+  if (logged) return { variant: logged.variant || "std", sets: logged.sets.map(s => ({ ...s, done: true })), fresh: false };
   const v = ex.custom ? "std" : variantOf(u, ex);
   const def = defOf(ex, v);
   const p = prefillSets(u, { sr: srFor(u, ex, def), kind: def.kind, db: def.db }, ex.id, v, date);
@@ -335,9 +336,10 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0) {
     ${sug ? `<div class="pill ${sug.type}">${esc(sug.text)}</div>` : ""}
     ${d.fresh ? `<div class="pill hold fresh-note">First time: set the weight and reps you actually did.</div>` : ""}
     <div class="sets">${d.sets.map((x, i) => setRow(entry, x, i)).join("")}</div>
+    ${def.kind === "time" ? setTimer(u, date, ex.id, d.sets) : ""}
     <div class="row"><button class="btn small" data-act="addSet">+ Add set</button><button class="btn small" data-act="timer">Rest timer</button>
       ${logged ? `<button class="btn small" data-act="cancelEdit">Cancel</button><button class="btn small danger" data-act="deleteEx">${state.confirmDel === ek ? "Confirm delete" : "Delete"}</button>` : added ? `<button class="btn small danger" data-act="dropExtra">Remove</button>` : ""}</div>
-    <button class="btn primary block" data-act="saveEx">${logged ? "Save changes" : "Save exercise"}</button>
+    <button class="btn primary block ${d.sets.length && d.sets.every(x => x.done) ? "ready" : ""}" data-act="saveEx">${logged ? "Save changes" : "Save exercise"}</button>
     ${state.planEdit && !added ? `<div class="plan-tools"><span class="small muted">Plan for Week ${state.sel.week} ${state.sel.day}</span>
       <div class="row"><button class="btn small" data-act="planMove" data-v="-1" ${idx === 0 ? "disabled" : ""} aria-label="Move up">↑</button><button class="btn small" data-act="planMove" data-v="1" ${idx >= count - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
       <label class="field" style="flex:1;min-width:120px">Target<input type="text" data-act="planSr" value="${esc(target)}"></label>
@@ -358,13 +360,24 @@ function exPanel(ex, safety) {
 }
 function stretchBox(k) {
   const s = STRETCH[k];
-  return `<div class="stretch"><b>${esc(s.n)}<span>${esc(s.t)}</span></b><p>${esc(s.h)}</p><a href="${ytStretch(s.n)}" target="_blank" rel="noopener">See it done</a></div>`;
+  const each = /per side/.test(s.t) ? "Hold · each side" : /each way/.test(s.t) ? "Hold · each way" : "Hold";
+  return `<div class="stretch"><b>${esc(s.n)}<span>${esc(s.t)}</span></b><p>${esc(s.h)}</p>
+    ${s.f ? `<dl class="stretch-notes"><dt>Feel it</dt><dd>${esc(s.f)}</dd><dt>What it does</dt><dd>${esc(s.g)}</dd></dl>` : ""}
+    ${s.sec ? T.html(`st:${k}`, s.sec, each) : ""}
+    <a href="${ytStretch(s.n)}" target="_blank" rel="noopener">See it done</a></div>`;
+}
+// Timed exercises (planks, holds, jump rope): the timer runs the next set that isn't checked off, and checks it when time's up.
+function setTimer(u, date, id, sets) {
+  const si = sets.findIndex(x => !x.done);
+  if (si < 0) return `<div class="tmr-note small muted">All sets checked off. Save it when you're ready.</div>`;
+  const sec = +sets[si].r || 30;
+  return T.html(`set:${u}|${date}|${id}|${si}`, sec, `Set ${si + 1} of ${sets.length}`, `.set[data-s="${si}"] input[data-f="r"]`);
 }
 function setRow(e, s, si) {
   const u = S.unitLabel(e.kind, e.db);
   const rStep = e.kind === "time" || e.kind === "carry" ? 5 : 1;
-  return `<div class="set ${u.w ? "" : "noweight"}" data-s="${si}">
-    <span class="n">${si + 1}</span>
+  return `<div class="set ${u.w ? "" : "noweight"} ${s.done ? "is-done" : ""}" data-s="${si}">
+    <button type="button" class="n setcheck" role="checkbox" aria-checked="${!!s.done}" data-act="setDone" aria-label="Set ${si + 1} done">${s.done ? "✓" : si + 1}</button>
     ${u.w ? stepper("w", s.w, u.w, 1) : ""}
     ${stepper("r", s.r, u.r, rStep)}
     <div class="diff" role="group" aria-label="How set ${si + 1} felt">${[1, 2, 3].map(d => `<button type="button" data-act="diff" data-d="${d}" aria-pressed="${(s.d || 2) === d}">${DIFF[d]}</button>`).join("")}<button type="button" class="del" data-act="delSet" aria-label="Remove set ${si + 1}">×</button></div>
@@ -1234,53 +1247,24 @@ function afterRender() {
 }
 
 // ---------------------------------------------------------------- overlays: rest timer & settings
-let tick, audio, wake;
+// The rest timer uses the same engine as every other timer (js/timer.js): 3-2-1-go, then 5 beeps.
 function openTimer(exId) {
   const ex = ALL_EX[exId] || resolveEx(exId, {});
   state.overlay = "timer";
-  state.timer = { ex, total: store.get("twp-rest", 90), left: store.get("twp-rest", 90), running: false, endAt: 0, done: false };
+  state.timer = { ex, total: store.get("twp-rest", 90) };
   drawTimer();
 }
 function drawTimer() {
   const t = state.timer; if (!t) return;
-  const secs = Math.max(0, Math.ceil(t.left)); const m = Math.floor(secs / 60), s = secs % 60;
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Rest timer"><div class="inner">
     <div class="between"><span class="eyebrow">Rest · ${esc(t.ex?.n || "")}</span><button class="btn small" data-act="closeOverlay">Close</button></div>
-    <div class="clock ${t.done ? "done" : ""}" aria-live="polite">${t.done ? "GO" : `${m}:${String(s).padStart(2, "0")}`}</div>
-    <div class="ring"><div style="width:${t.total ? Math.max(0, (t.left / t.total) * 100) : 0}%"></div></div>
+    <div class="rest-tmr">${T.html("rest", t.total)}</div>
     <div class="row" style="justify-content:center">${[60, 90, 120].map(n => `<button class="btn small" data-act="timerSet" data-n="${n}" aria-pressed="${t.total === n}">${n}s</button>`).join("")}
       <button class="btn small" data-act="timerAdd" data-n="-15">−15</button><button class="btn small" data-act="timerAdd" data-n="15">+15</button></div>
-    <button class="btn primary block" data-act="timerGo">${t.running ? "Pause" : t.done ? "Restart" : "Start"}</button>
     ${t.ex?.s?.length ? `<h3 class="h3">Stretch while you wait</h3>${t.ex.s.map(stretchBox).join("")}` : ""}
   </div></div>`;
 }
-function runTimer() {
-  const t = state.timer;
-  if (t.running) { t.running = false; t.left = Math.max(0, (t.endAt - Date.now()) / 1000); clearInterval(tick); releaseWake(); drawTimer(); return; }
-  if (t.done || t.left <= 0) { t.left = t.total; t.done = false; }
-  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume?.(); } catch { /* no audio */ }
-  navigator.wakeLock?.request("screen").then(w => (wake = w)).catch(() => {});
-  t.running = true; t.endAt = Date.now() + t.left * 1000;
-  clearInterval(tick);
-  tick = setInterval(() => {
-    t.left = (t.endAt - Date.now()) / 1000;
-    if (t.left <= 0) { t.left = 0; t.running = false; t.done = true; clearInterval(tick); releaseWake(); alarm(); }
-    if (state.timer === t && $("#overlay .clock")) drawTimer();
-  }, 250);
-  drawTimer();
-}
-function alarm() {
-  navigator.vibrate?.([300, 120, 300, 120, 300]);
-  try {
-    [0, .35, .7].forEach(off => {
-      const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
-      g.gain.setValueAtTime(.001, audio.currentTime + off); g.gain.exponentialRampToValueAtTime(.4, audio.currentTime + off + .02); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + off + .25);
-      o.start(audio.currentTime + off); o.stop(audio.currentTime + off + .3);
-    });
-  } catch { /* audio unavailable */ }
-}
-function releaseWake() { wake?.release?.().catch(() => {}); wake = null; }
-function closeOverlay() { clearInterval(tick); releaseWake(); state.timer = null; state.overlay = null; $("#overlay").innerHTML = ""; }
+function closeOverlay() { T.stop("rest"); state.timer = null; state.overlay = null; $("#overlay").innerHTML = ""; }
 
 function exportData() {
   const data = { app: "two-week-split", exportedAt: new Date().toISOString(), ...state.data };
@@ -1361,6 +1345,7 @@ function setValue(c, f, val, typingIn) {
   });
   c.d.fresh = false; putDraft(c.u, c.date, c.id, c.d);
   c.card.querySelector(".fresh-note")?.remove();
+  T.syncCard(c.card);
 }
 
 // ---------------------------------------------------------------- events
@@ -1454,8 +1439,15 @@ document.addEventListener("click", e => {
       const c = cardFor(el); c.d.sets[c.si].d = +el.dataset.d; c.d.fresh = false; putDraft(c.u, c.date, c.id, c.d);
       el.parentElement.querySelectorAll("[data-d]").forEach(b => b.setAttribute("aria-pressed", b === el)); c.card.querySelector(".fresh-note")?.remove(); break;
     }
+    case "setDone": {
+      const c = cardFor(el); const set = c.d.sets[c.si]; set.done = !set.done; putDraft(c.u, c.date, c.id, c.d);
+      if (set.done) navigator.vibrate?.(30);
+      if (defOf(c.ex, c.d.variant).kind === "time") { T.stop(`set:${c.u}|${c.date}|${c.id}|${c.si}`); render(); break; }
+      el.setAttribute("aria-checked", set.done); el.textContent = set.done ? "✓" : c.si + 1; el.closest(".set").classList.toggle("is-done", set.done);
+      c.card.querySelector("[data-act=saveEx]")?.classList.toggle("ready", c.d.sets.every(x => x.done)); break;
+    }
     case "delSet": { const c = cardFor(el); c.d.sets.splice(c.si, 1); putDraft(c.u, c.date, c.id, c.d); render(); break; }
-    case "addSet": { const c = cardFor(el); c.d.sets.push({ ...(c.d.sets[c.d.sets.length - 1] || { w: 0, r: 10 }), d: 2 }); putDraft(c.u, c.date, c.id, c.d); render(); break; }
+    case "addSet": { const c = cardFor(el); c.d.sets.push({ ...(c.d.sets[c.d.sets.length - 1] || { w: 0, r: 10 }), d: 2, done: false }); putDraft(c.u, c.date, c.id, c.d); render(); break; }
     case "saveEx": { const c = cardFor(el); saveExercise(c); render(); break; }
     case "editEx": { const u = LU(), date = LD(); state.editing.add(editKey(u, date, el.dataset.ex)); render(); break; }
     case "cancelEdit": { const c = cardFor(el); store.del(dKey(c.u, c.date, c.id)); state.editing.delete(editKey(c.u, c.date, c.id)); render(); break; }
@@ -1561,13 +1553,21 @@ document.addEventListener("click", e => {
       break;
     }
     case "closeOverlay": closeOverlay(); render(); break;
-    case "timerSet": state.timer.total = state.timer.left = +el.dataset.n; state.timer.done = false; store.set("twp-rest", +el.dataset.n); if (state.timer.running) state.timer.endAt = Date.now() + state.timer.left * 1000; drawTimer(); break;
-    case "timerAdd": { const t = state.timer; t.left = Math.max(0, t.left + +el.dataset.n); t.total = Math.max(t.total, t.left); if (t.running) t.endAt = Date.now() + t.left * 1000; drawTimer(); break; }
-    case "timerGo": runTimer(); break;
+    case "timerSet": { const t = state.timer; t.total = +el.dataset.n; store.set("twp-rest", t.total); const on = T.isActive("rest"); drawTimer(); if (on) T.start("rest", t.total); break; }
+    case "timerAdd": { const t = state.timer; const n = +el.dataset.n; if (!T.adjust("rest", n)) { t.total = Math.max(15, t.total + n); drawTimer(); } break; }
     case "export": exportData(); break;
   }
 });
 
+document.addEventListener("twp-timer-done", e => {
+  const key = e.detail.key; if (!key.startsWith("set:")) return;
+  const [u, date, id, si] = key.slice(4).split("|");
+  const item = todaysList(u, date).find(x => x.ex.id === id); if (!item) return;
+  const s = sessionFor(u, date); const d = getDraft(u, date, item.ex, s?.exercises?.find(x => x.id === id));
+  if (!d.sets[+si]) return;
+  d.sets[+si].done = true; putDraft(u, date, id, d);
+  setTimeout(render, 1600); // after the end beeps, move the timer on to the next set
+});
 document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-view]"); if (b) go(b.dataset.view); });
 document.getElementById("who").addEventListener("click", openSettings);
 document.getElementById("gear").addEventListener("click", openSettings);
