@@ -19,13 +19,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
 </head>
 <body>
+  <a class="skip" href="#main">Skip to main content</a>
   <header class="top">
     <h1><img src="icons/ears.png" alt="" class="brand-mark">Two-Week Split</h1>
-    <span class="sync" id="sync">Connecting</span>
+    <span class="sync" id="sync" role="status">Connecting</span>
     <button class="who hidden" id="who" type="button" aria-label="Switch person"></button>
     <button class="icon-btn" id="gear" type="button" aria-label="Settings">⚙</button>
   </header>
-  <main id="main"><p class="muted">Loading…</p></main>
+  <main id="main" tabindex="-1"><p class="muted">Loading…</p></main>
   <nav class="tabs hidden" id="tabs" aria-label="Sections">
     <button type="button" data-view="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg><span></span>Workout</button>
     <button type="button" data-view="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span></span>Progress</button>

@@ -16,6 +16,8 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - Edit any day's plan: reorder, change targets, rename the day, clear it, copy it to your partner, add from the library, reset.
 - Reminders for weigh-ins, measurements, resting heart rate and the end-of-cycle report.
 - Rest timer with stretches, partner mode, offline support.
+- A check-off box on every set, and built-in timers for timed sets and stretches. All timers count down 3-2-1-go and beep 5 times at the end, with a volume slider.
+- Stretches say where you should feel them and what they do.
 
 **Make it yours (Settings)**
 - Profiles for anyone, set up in the app: goals, focus areas, aches to track, default version, cardio style, bike commute.
@@ -37,6 +39,16 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - End-of-cycle report every two weeks: what went up, what stalled, and what hurt, plus a summary to paste into Claude for plan adjustments.
 - Before & after: compare any two dates.
 
+**Accessibility (Settings → Accessibility, also on the sign-in screen)**
+- Quick setups: Low vision, Blind / screen reader, Deaf / hard of hearing, Dyslexia, ADHD / focus, Color blindness, Motion sensitivity, Limited hand movement. Each turns on a group of the options below.
+- Seeing: six text sizes (up to 28 px base), high contrast (or match the phone's Increase Contrast), bold text, bigger buttons (52 px+), underlined links, strong focus outline, color-blind-safe colors with symbols.
+- Reading: Atkinson Hyperlegible, Lexend or OpenDyslexic fonts (bundled, work offline), roomier letter/word/line spacing, plain text style (no italics or ALL CAPS), read-aloud buttons on exercises and stretches.
+- Hearing: gentle screen flash for timer countdowns and endings (never more than once a second), captioned-video links, vibration.
+- Screen readers: every control labeled, pop-up windows trap focus and close with Escape, focus stays put when the screen redraws, timers announce 3-2-1-go / halfway / 10 seconds / time's up, charts have a table version, the calendar reads who trained each day, skip link.
+- Focus & memory: one step at a time on the Workout tab, rest timer starts when you check off a set, messages that stay up longer (or until tapped), calm mode.
+- Motion: reduce motion (or match the phone).
+- Options follow the person to any phone and also apply before sign-in. Checked with axe-core (WCAG 2.2 AA) on all six themes, light and dark, with options off and on: no violations.
+
 ## Files
 
 | File | What's in it |
@@ -45,6 +57,9 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | `js/library.js` | The built-in exercise library and its tags. |
 | `js/safety.js` | Joint load and injury risks for plan exercises. |
 | `js/fun.js` | Voice lines, celebrations, badges, streaks, points. |
+| `js/timer.js` | Every timer: 3-2-1-go countdown, 5-beep finish, volume. |
+| `js/a11y.js` | Accessibility options, presets, announcements, speech, focus handling. |
+| `fonts/` | Reading fonts (Atkinson Hyperlegible, Lexend, OpenDyslexic) and their open licenses. |
 | `js/stats.js` | Progress math: best sets, weight-bump rules, reports. |
 | `js/app.js` | Screens and buttons. |
 | `js/firebase.js` | Sign-in, crews, database connection and Firebase config. |

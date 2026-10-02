@@ -120,5 +120,23 @@ for (const b of BUILTIN) {
   for (const r of b.risks) yes(`library ${b.id} risk has advice`, r.risk && r.avoid);
 }
 
+
+// ---------------------------------------------------------------- accessibility settings
+{
+  const mem = {}; globalThis.localStorage = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
+  const A = await import(join(dir, "a11y.js"));
+  let a = A.load(null);
+  yes("a11y defaults load", a.textSize === "m" && a.vibrate === true && a.focusMode === false);
+  for (const [id, p] of Object.entries(A.PRESETS)) for (const k of Object.keys(p.set)) yes(`preset ${id}.${k} is a real option`, k in A.DEFAULTS);
+  globalThis.document = undefined;
+  const set = patch => { a = { ...a, ...patch, _t: Date.now() }; mem["twp-a11y"] = JSON.stringify({ ...a, _who: "mat" }); };
+  set({ textSize: "xxl", toastTime: 0 });
+  a = A.load({ textSize: "l", _t: 1 }, "mat");
+  yes("newer phone copy beats older profile copy", a.textSize === "xxl");
+  a = A.load({ textSize: "s", _t: Date.now() + 5000 }, "mat");
+  yes("newer profile copy beats phone copy", a.textSize === "s");
+  a = A.load({ textSize: "l", _t: 1 }, "benny");
+  yes("another person's phone copy is ignored", a.textSize === "l" && a.toastTime === 4);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

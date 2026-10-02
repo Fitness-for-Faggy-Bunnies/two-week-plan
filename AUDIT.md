@@ -37,3 +37,13 @@ What was checked, what was fixed, and what's left. Tests: `node tests/run.mjs` (
 - **`js/app.js` is about 1,750 lines.** Splitting it by screen would make future changes safer.
 - **Small buttons** are 34 px tall; 44 px is easier to hit with sweaty fingers.
 - **Vibration** doesn't work on iPhones (Apple blocks it for web apps); sound still works after you tap something.
+
+
+## Accessibility pass (October 2026)
+Target: WCAG 2.2 AA everywhere, plus options beyond it.
+- axe-core 4.10 (wcag2a/aa, 2.1, 2.2, best-practice) on every screen and pop-up, all 6 themes, light and dark, with: defaults, high contrast, color-blind-safe, every option on at the biggest text, and focus mode. 0 violations.
+- Fixed along the way: Iron theme's selected day chip (3.1:1), stretch labels and links on tinted boxes, light green on gray tiles, video link color, library headings skipping a level, a report box you couldn't scroll by keyboard, a skip link that peeked out at huge text, the tab bar running off screen at huge text.
+- Reflow: no sideways scrolling at 320 px wide with the biggest text, extra-roomy spacing, OpenDyslexic and bold all on.
+- Keyboard: skip link, focus trapped in pop-ups, Escape closes, focus returns to what opened it, focus kept on the same control after redraws.
+- Screen readers: timers no longer read out every tenth of a second; they announce the countdown and milestones instead.
+- Still to check on real phones: VoiceOver and TalkBack walkthrough, spoken timers with the screen locked.

@@ -61,11 +61,15 @@ const unlockScreen = () => { wake?.release?.().catch(() => {}); wake = null; };
 export const isActive = key => active?.key === key && active.phase !== "done";
 export const state = key => (active?.key === key ? active : null);
 
-export function start(key, seconds) {
+// Other parts of the app (speech, screen flashes, screen-reader announcements) listen for these.
+const emit = (what, extra = {}) => document.dispatchEvent(new CustomEvent("twp-timer", { detail: { key: active?.key, label: active?.label || "", what, ...extra } }));
+const labelFor = key => document.querySelector(`.tmr[data-tkey="${CSS.escape(key)}"]`)?.dataset.tlabel || "";
+
+export function start(key, seconds, label = labelFor(key)) {
   seconds = Math.max(1, Math.round(+seconds || 0));
   stopAll();
   const now = Date.now();
-  active = { key, total: seconds, phase: "count", runAt: now + 3000, endAt: now + 3000 + seconds * 1000, left: seconds };
+  active = { key, label, total: seconds, phase: "count", runAt: now + 3000, endAt: now + 3000 + seconds * 1000, left: seconds, said: {} };
   scheduleRun(seconds);
   lockScreen();
   clearInterval(tick); tick = setInterval(step, 100);
@@ -76,12 +80,12 @@ export function toggle(key, seconds) {
   if (active?.key === key && (active.phase === "count" || active.phase === "run")) {
     if (active.phase === "count") { stop(key); return; }
     active.left = Math.max(0, (active.endAt - Date.now()) / 1000);
-    active.phase = "paused"; cancelSound(); clearInterval(tick); unlockScreen(); paint(); return;
+    active.phase = "paused"; cancelSound(); clearInterval(tick); unlockScreen(); paint(); emit("paused"); return;
   }
-  if (active?.key === key && active.phase === "paused") { const total = active.total, left = active.left; start(key, left); active.total = total; paint(); return; }
+  if (active?.key === key && active.phase === "paused") { const total = active.total, left = active.left, label = active.label; start(key, left, label); active.total = total; paint(); return; }
   start(key, seconds);
 }
-export function stop(key) { if (!key || active?.key === key) stopAll(); }
+export function stop(key, byUser = false) { if (!key || active?.key === key) { if (byUser && active && active.phase !== "done") emit("stopped"); stopAll(); } }
 function stopAll() {
   const k = active?.key; cancelSound(); clearInterval(tick); unlockScreen(); active = null;
   if (k) paintKey(k, null);
@@ -102,15 +106,21 @@ export function adjust(key, delta) {
 function step() {
   if (!active) return;
   const now = Date.now();
-  if (active.phase === "count" && now >= active.runAt) active.phase = "run";
+  const said = active.said;
+  if (active.phase === "count") {
+    const n = Math.ceil((active.runAt - now) / 1000);
+    if (n >= 1 && n <= 3 && !said[`c${n}`]) { said[`c${n}`] = 1; emit("count", { n }); }
+    if (now >= active.runAt) { active.phase = "run"; if (!said.go) { said.go = 1; emit("go"); } }
+  }
   if (active.phase === "run") {
     active.left = Math.max(0, (active.endAt - now) / 1000);
+    if (active.total >= 20 && active.left <= active.total / 2 && !said.half && active.left > 11) { said.half = 1; emit("half"); }
+    if (active.total > 15 && active.left <= 10 && !said.ten && active.left > 0) { said.ten = 1; emit("ten"); }
     if (active.left <= 0) {
       active.phase = "done"; clearInterval(tick); unlockScreen();
-      navigator.vibrate?.([180, 120, 180, 120, 180, 120, 180, 120, 180]);
       const key = active.key;
       setTimeout(() => { if (!active || active.phase === "done") { scheduled = []; endBeeps = []; } }, 2000);
-      paint();
+      paint(); emit("done");
       document.dispatchEvent(new CustomEvent("twp-timer-done", { detail: { key } }));
       return;
     }
@@ -131,7 +141,7 @@ function paintKey(key, t) {
     const v = view(t, +el.dataset.tsec);
     el.classList.remove("counting", "running", "paused", "done"); if (v.cls) el.classList.add(v.cls);
     const c = el.querySelector(".tmr-clock"); if (c && c.textContent !== v.clock) c.textContent = v.clock;
-    const b = el.querySelector("[data-act=tGo]"); if (b && b.textContent !== v.btn) b.textContent = v.btn;
+    const b = el.querySelector("[data-act=tGo]"); if (b && b.textContent !== v.btn) { b.textContent = v.btn; b.setAttribute("aria-label", `${v.btn} timer${el.dataset.tlabel ? ": " + el.dataset.tlabel : ""}`); }
     const r = el.querySelector("[data-act=tReset]"); if (r) r.hidden = !t;
     const bar = el.querySelector(".tmr-bar > i"); if (bar) bar.style.width = `${Math.max(0, Math.min(100, v.pct))}%`;
   });
@@ -142,12 +152,13 @@ const paint = () => { if (active) paintKey(active.key, active); };
 // from: optional selector (inside the same [data-ex] card) of an input holding the seconds, e.g. a set's seconds box.
 export function html(key, seconds, label = "", from = "") {
   const t = state(key); const v = view(t, seconds); const vol = getVol();
-  return `<div class="tmr ${v.cls}" data-tkey="${esc(key)}" data-tsec="${seconds}"${from ? ` data-tfrom="${esc(from)}"` : ""}>
+  const al = label ? `: ${esc(label)}` : "";
+  return `<div class="tmr ${v.cls}" data-tkey="${esc(key)}" data-tsec="${seconds}" data-tlabel="${esc(label)}" role="group" aria-label="Timer${al}"${from ? ` data-tfrom="${esc(from)}"` : ""}>
     <div class="tmr-main">
       ${label ? `<span class="tmr-label">${esc(label)}</span>` : ""}
-      <span class="tmr-clock mono" aria-live="polite">${v.clock}</span>
-      <button type="button" class="btn small primary" data-act="tGo">${v.btn}</button>
-      <button type="button" class="btn small" data-act="tReset" ${t ? "" : "hidden"}>Reset</button>
+      <span class="tmr-clock mono" role="timer" aria-label="Time left">${v.clock}</span>
+      <button type="button" class="btn small primary" data-act="tGo" aria-label="${v.btn} timer${al}">${v.btn}</button>
+      <button type="button" class="btn small" data-act="tReset" aria-label="Reset timer${al}" ${t ? "" : "hidden"}>Reset</button>
     </div>
     <div class="tmr-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, v.pct))}%"></i></div>
     <label class="tmr-vol"><span class="tmr-vol-icon" aria-hidden="true">${volIcon(vol)}</span><span class="visually-hidden">Timer volume</span>
@@ -162,8 +173,12 @@ document.addEventListener("click", e => {
   const el = b.closest(".tmr"); const key = el.dataset.tkey;
   e.stopPropagation();
   syncSeconds(el);
-  if (b.dataset.act === "tGo") { if (active?.key === key && active.phase === "done") start(key, +el.dataset.tsec); else toggle(key, +el.dataset.tsec); }
-  if (b.dataset.act === "tReset") stop(key);
+  if (b.dataset.act === "tGo") {
+    const wasCounting = active?.key === key && active.phase === "count";
+    if (active?.key === key && active.phase === "done") start(key, +el.dataset.tsec); else toggle(key, +el.dataset.tsec);
+    if (wasCounting) document.dispatchEvent(new CustomEvent("twp-timer", { detail: { key, what: "stopped" } }));
+  }
+  if (b.dataset.act === "tReset") stop(key, true);
 }, true);
 // Read the seconds from the linked input (if any), so editing a set's seconds changes its timer right away.
 export const syncCard = card => card?.querySelectorAll(".tmr[data-tfrom]").forEach(syncSeconds);
