@@ -557,3 +557,5 @@ body[data-motion="reduce"] #flash-alert.pulse{animation:none!important}
 .ex-all{justify-content:flex-end;margin:4px 0 -2px}
 .ex-all .small{margin-right:auto}
 body[data-contrast="high"] .ex-toggle .chev{border-color:#fff}
+.our-machines{display:grid;gap:4px;margin:4px 0}
+.our-machines .btn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}

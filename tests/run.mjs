@@ -121,6 +121,14 @@ for (const b of BUILTIN) {
 }
 
 
+// Our machines: every "At our gym" link points at a real machine and a real plan exercise.
+{
+  const { PLAN_MACHINES, MACHINES } = await import(join(dir, "library.js"));
+  const { ALL_EX } = await import(join(dir, "plan.js"));
+  yes("23 machine names covered (24 entries: fly + rear delt share a machine)", MACHINES.length === 24);
+  for (const [pid, ids] of Object.entries(PLAN_MACHINES)) { yes(`plan exercise ${pid} exists`, !!ALL_EX[pid]); for (const id of ids) yes(`${pid} → ${id} exists`, MACHINES.some(m => m.id === id)); }
+  for (const m of MACHINES) yes(`${m.id} has a setup tip and isn't a dumbbell`, m.tip.length > 20 && m.equip === "machine" && m.db === false);
+}
 // ---------------------------------------------------------------- accessibility settings
 {
   const mem = {}; globalThis.localStorage = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };

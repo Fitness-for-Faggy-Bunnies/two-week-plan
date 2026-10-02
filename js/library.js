@@ -271,10 +271,161 @@ export const STRETCH_BY_FOCUS = {
   core: ["twist", "backarch"], glutes: ["fig4", "hipflex"], legs: ["quad", "hamstring"], calves: ["calf", "ankle"], cardio: ["quad", "calf"]
 };
 
+
+// ---------------------------------------------------------------- Planet Fitness purple machines (our gym's inventory)
+// MTS = Hammer Strength MTS: each arm moves on its own, so you can work one side at a time and the stronger side can't take over.
+// M(...) is L(...) for machines: no dumbbells, weight steps follow Settings → Our gym → Machine step. tip = how to set the machine up.
+const M = (id, name, focus, pattern, lv, position, joints, sr, how, risks, o = {}) => ({ ...L(id, name, focus, pattern, lv, position, joints, sr, how, risks, { ...o, equip: "machine", db: false }), tip: o.tip || "", mts: !!o.mts });
+
+export const MACHINES = [
+  // ---- chest
+  M("m-chest-press", "Chest Press", ["chest"], "push", [1, 2, 0], "seated", { shoulders: 1, elbows: 1, wrists: 1 }, "3 × 10–12",
+    "Sit with your back flat on the pad. Press the handles straight out until your arms are almost straight, then bring them back slowly until you feel a light chest stretch.",
+    [["shoulders", "Front-of-shoulder strain when the handles come back too far", "Stop the return when your hands are about even with your chest. Don't let the weight pull your shoulders forward."],
+     ["elbows", "Elbow strain from snapping the arms straight", "Stop just short of locking out."]],
+    { focus2: ["shoulders", "arms"], tip: "Set the seat so the handles line up with the middle of your chest, not your shoulders. Many have a foot bar that brings the handles forward so you can start without straining." }),
+  M("m-mts-chest-press", "MTS Chest Press", ["chest"], "push", [1, 2, 0], "seated", { shoulders: 1, elbows: 1, wrists: 1 }, "3 × 10–12",
+    "Each arm moves on its own. Press both together, or one at a time to even out a weaker side. The handles move slightly inward as you press, like a dumbbell press.",
+    [["shoulders", "Shoulder strain at the start position", "Start with a comfortable stretch, not a deep one. Keep shoulder blades back on the pad."],
+     ["elbows", "Elbow strain from locking out", "Stop just short of straight."]],
+    { uni: true, mts: true, focus2: ["shoulders", "arms"], tip: "Seat height: handles at mid-chest. Because each side is separate, the weight per side will feel heavier than you expect. Start lighter than the regular Chest Press." }),
+  M("m-mts-incline", "MTS Incline Press", ["chest"], "push", [1, 2, 0], "seated", { shoulders: 2, elbows: 1, wrists: 1 }, "3 × 10–12",
+    "Press up and out on an incline. Builds the upper chest, the part that shapes the top of the pecs. Each arm moves on its own.",
+    [["shoulders", "Front-of-shoulder pinching, more likely than on a flat press", "Set the seat so the handles start at upper-chest height, keep elbows slightly tucked, and skip the deepest part of the stretch if your shoulder complains."],
+     ["neck", "Neck tension from pushing the head into the pad", "Keep your head resting, chin slightly tucked."]],
+    { uni: true, mts: true, focus2: ["shoulders", "arms"], tip: "Handles should start at upper-chest height, not shoulder height. Too low a seat turns it into a shoulder press." }),
+  M("m-pec-fly", "Pectoral Fly", ["chest"], "isolation", [1, 1, 0], "seated", { shoulders: 2, elbows: 1 }, "3 × 12–15",
+    "Arms out wide with a slight bend in the elbows. Bring the handles together in front of your chest like hugging a barrel, squeeze, then open slowly.",
+    [["shoulders", "Shoulder or chest strain at the wide stretch", "Set the start position so your hands are just behind your chest, not far behind. Light weight, slow on the way back."],
+     ["elbows", "Elbow strain", "Keep the same small elbow bend the whole time."]],
+    { tip: "Same machine as the rear delt fly. For chest, face away from the pad's back, sit with your back on it. Adjust the start lever so the stretch is gentle." }),
+  // ---- shoulders
+  M("m-shoulder-press", "Shoulder Press", ["shoulders"], "push", [1, 2, 0], "seated", { shoulders: 2, elbows: 1, neck: 1 }, "3 × 8–12",
+    "Press the handles up without shrugging, then lower until the handles are about chin height.",
+    [["shoulders", "Shoulder impingement (pinching at the top or bottom)", "Use the neutral (palms-in) handles if there are any, don't drop the handles lower than your chin, and stop if you feel a pinch."],
+     ["neck", "Neck strain from shrugging", "Keep your shoulders down away from your ears."],
+     ["lowerBack", "Lower back arching off the pad", "Brace your stomach and keep your back flat on the pad."]],
+    { focus2: ["arms"], tip: "Seat height so the handles start at shoulder level or just above. Too low a seat means a deeper, harder-on-the-shoulders start." }),
+  M("m-mts-shoulder-press", "MTS Shoulder Press", ["shoulders"], "push", [1, 2, 0], "seated", { shoulders: 2, elbows: 1, neck: 1 }, "3 × 8–12",
+    "Each arm presses on its own, in a slight arc toward the middle. Press together, or alternate arms to keep your core working.",
+    [["shoulders", "Shoulder pinching", "Keep the range comfortable and stop the lowering at about chin height."],
+     ["neck", "Neck strain from shrugging", "Shoulders down the whole set."]],
+    { uni: true, mts: true, focus2: ["arms"], tip: "Start lighter than the regular Shoulder Press. Each side is separate, so it feels heavier." }),
+  M("m-rear-delt", "Rear Deltoid Fly", ["shoulders", "back"], "isolation", [1, 1, 0], "seated", { shoulders: 1 }, "3 × 12–15",
+    "Face the pad, chest against it. Open your arms wide with a slight elbow bend and squeeze between your shoulder blades, then return slowly.",
+    [["shoulders", "Shoulder strain from swinging", "Light weight, slow and controlled. Lead with your elbows, not your hands."],
+     ["neck", "Shrugging into the neck", "Keep your shoulders down."]],
+    { tip: "Same machine as the Pectoral Fly. Sit facing the pad and move the handles to the back (rear delt) position. Set the seat so the handles are at shoulder height." }),
+  // ---- back
+  M("m-lat-pulldown", "Lat Pulldown", ["back"], "pull", [1, 2, 0], "seated", { shoulders: 1, elbows: 1 }, "3 × 10–12",
+    "Pull the bar or handles to your upper chest, elbows driving down toward your back pockets. Let it rise slowly until your arms are nearly straight.",
+    [["shoulders", "Shoulder strain from pulling behind the head", "Always pull to the front, to your upper chest."],
+     ["lowerBack", "Lower back strain from leaning far back and yanking", "Lean back only slightly and keep the movement smooth."]],
+    { focus2: ["arms"], tip: "Set the thigh pad so your legs are snug under it. That keeps you from lifting off the seat." }),
+  M("m-mts-pulldown", "MTS Front Pulldown", ["back"], "pull", [1, 2, 0], "seated", { shoulders: 1, elbows: 1 }, "3 × 10–12",
+    "Each arm pulls on its own along a set path. Good for a weaker side: do one arm at a time and match the reps.",
+    [["shoulders", "Shoulder strain at the top stretch", "Don't let the weight yank your arms all the way up. Control the top."],
+     ["elbows", "Elbow strain from a too-wide grip", "Use the grip that keeps your wrists and elbows lined up."]],
+    { uni: true, mts: true, focus2: ["arms"], tip: "Thigh pad snug. Start lighter than the regular Lat Pulldown." }),
+  M("m-seated-row", "Seated Row", ["back"], "pull", [1, 2, 0], "seated", { shoulders: 1, elbows: 1, lowerBack: 1 }, "3 × 10–12",
+    "Chest against the pad, pull the handles toward your ribs and squeeze your shoulder blades together. Return slowly.",
+    [["lowerBack", "Lower back strain from rocking", "Keep your chest on the pad the whole set. The pad does the work of holding you still."],
+     ["shoulders", "Shrugging into the neck", "Pull with your elbows, shoulders down."]],
+    { focus2: ["arms", "shoulders"], tip: "Set the chest pad so you can just reach the handles with your arms straight." }),
+  M("m-mts-row", "MTS Row", ["back"], "pull", [1, 2, 0], "seated", { shoulders: 1, elbows: 1 }, "3 × 10–12",
+    "Chest on the pad, row each handle toward your ribs. Each side moves on its own. This is our gym's chest-supported row.",
+    [["lowerBack", "Lifting your chest off the pad to cheat the weight up", "Keep your chest on the pad. Lower the weight if you have to."],
+     ["shoulders", "Shrugging", "Shoulders down, squeeze your shoulder blades."]],
+    { uni: true, mts: true, focus2: ["arms", "shoulders"], tip: "Chest pad set so you can just reach the handles. Try one arm at a time to even out sides." }),
+  M("m-assist", "Chin/Dip Assist", ["back", "chest", "arms"], "pull", [1, 2, 0], "standing", { shoulders: 2, elbows: 1, wrists: 1 }, "3 × 8–10",
+    "Kneel on the pad. For chin-ups, pull your chest toward the handles and lower slowly. For dips, hold the low handles and lower until your elbows are about 90°, then press up. More weight on the stack means more help.",
+    [["shoulders", "Shoulder strain at the bottom of a dip", "Only go as low as feels fine, often halfway. Stop at any pinch."],
+     ["knees", "Knee pressure on the pad", "Kneel with both knees centered on the pad. Some machines let you stand on it instead."],
+     ["shoulders", "Shoulder strain hanging at the top of a chin-up", "Don't hang loose at the top. Keep your shoulders slightly pulled down."]],
+    { kind: "assist", focus2: ["shoulders", "core"], tip: "Log the assist weight. Lower assist = harder. Drop the assist one notch when you can do 10 clean reps." }),
+  M("m-back-ext", "Back Extension Machine", ["back", "core"], "hinge", [1, 1, 0], "seated", { lowerBack: 2, hips: 1 }, "3 × 12–15",
+    "Seated, upper back against the pad. Push back by straightening at the hips until you're upright, then return slowly. Builds lower-back strength without bending over.",
+    [["lowerBack", "Lower back strain from going too heavy or leaning back too far", "Light weight, slow, and stop at upright. Never arch back past straight."]],
+    { focus2: ["glutes"], tip: "Set the range so you start only slightly bent forward. Our plan's Back Extension is the angled bench; this is the seated version and a good swap." }),
+  // ---- arms
+  M("m-arm-curl", "Arm Curl", ["arms"], "isolation", [1, 1, 0], "seated", { elbows: 2, wrists: 1 }, "3 × 10–12",
+    "Upper arms on the pad, curl the handles up, squeeze, and lower slowly until your arms are almost straight.",
+    [["elbows", "Elbow strain at the bottom stretch", "Don't let the weight drop you into a fully straight, locked elbow. Lower slowly."],
+     ["wrists", "Wrist strain", "Keep wrists straight, not bent back."]],
+    { tip: "Set the seat so your armpits sit on the top of the pad and your elbows line up with the machine's pivot point." }),
+  M("m-biceps-curl", "Biceps Curl", ["arms"], "isolation", [1, 1, 0], "seated", { elbows: 2, wrists: 1 }, "3 × 10–12",
+    "Elbows lined up with the pivot, curl up and lower slowly. A second curl machine, so one of you can use it while the other uses the Arm Curl.",
+    [["elbows", "Elbow strain at the bottom", "Control the last part of the lowering."],
+     ["wrists", "Wrist strain", "Wrists straight."]],
+    { tip: "Line your elbows up with the machine's pivot point. If the handles pull your elbows off the pad, raise the seat." }),
+  M("m-triceps-ext", "Triceps Extension", ["arms"], "isolation", [1, 1, 0], "seated", { elbows: 2, shoulders: 1 }, "3 × 10–12",
+    "Elbows on the pad, push the handles down and out until your arms are straight, then return slowly.",
+    [["elbows", "Elbow pain from heavy weight or snapping straight", "Moderate weight, smooth reps, no snapping at the end."],
+     ["shoulders", "Shoulders rolling forward", "Sit tall, back against the pad."]],
+    { tip: "Elbows lined up with the pivot point. Our plan's swap for the cable pushdown." }),
+  M("m-triceps-press", "Triceps Press", ["arms", "chest"], "push", [1, 2, 0], "seated", { elbows: 1, shoulders: 1, wrists: 1 }, "3 × 10–12",
+    "Seated dip: hold the handles at your sides and press down until your arms are straight, then let them rise slowly.",
+    [["shoulders", "Front-of-shoulder strain at the top", "Don't let the handles rise above where your elbows are at about 90°."],
+     ["wrists", "Wrist strain", "Grip firmly with wrists straight."]],
+    { focus2: ["shoulders"], tip: "A good stand-in for the assisted dip when the Chin/Dip machine is taken." }),
+  // ---- core
+  M("m-rotary-torso", "Rotary Torso", ["core"], "rotation", [1, 1, 0], "seated", { lowerBack: 1, hips: 1 }, "3 × 12 per side",
+    "Knees locked in, turn slowly through your midsection to one side and back. Do all reps one way, then switch.",
+    [["lowerBack", "Lower back strain from twisting fast or heavy", "Light weight, slow, and a comfortable range. This is control work, not a strength test."]],
+    { tip: "Set the start position so you can turn about 45° each way. Our plan's Torso Rotation Machine." }),
+  M("m-ab-crunch", "Abdominal Crunch", ["core"], "core", [1, 1, 0], "seated", { neck: 1, lowerBack: 1 }, "3 × 12–15",
+    "A seated crunch: hold the handles or pads and curl your chest down toward your hips using your stomach, then return slowly.",
+    [["neck", "Neck strain from pulling with the arms", "Let your arms just hold on. The stomach does the work."],
+     ["lowerBack", "Lower back strain from going heavy", "Moderate weight, slow reps."]],
+    { tip: "A crunch-style exercise. Optional: our plan's core work avoids crunches." }),
+  M("m-mts-ab-crunch", "MTS Abdominal Crunch", ["core"], "core", [1, 1, 0], "seated", { neck: 1, lowerBack: 1 }, "3 × 12–15",
+    "Same idea as the Abdominal Crunch, on a set path. Curl down with your stomach, return slowly.",
+    [["neck", "Neck strain", "Keep your head neutral, don't yank."],
+     ["lowerBack", "Lower back strain", "Moderate weight, controlled."]],
+    { mts: true, tip: "A crunch-style exercise. Optional: our plan's core work avoids crunches." }),
+  // ---- legs
+  M("m-leg-press", "Leg Press", ["legs", "glutes"], "squat", [1, 2, 0], "seated", { knees: 2, hips: 1, lowerBack: 1, ankles: 1 }, "3 × 10–12",
+    "Push the platform away through your heels, then lower until your knees are around 90°. Feet high and wide on the platform shifts the work to your glutes.",
+    [["knees", "Knee strain from going too deep or locking out", "Stop around 90° and never lock your knees at the top."],
+     ["lowerBack", "Lower back rounding at the bottom", "Keep your lower back pressed into the pad. If it peels off, you've gone too deep."],
+     ["ankles", "Foot and heel pressure", "Hold off while a foot injury is healing. Push through the whole foot, mostly the heel."]],
+    { focus2: ["calves"], tip: "There are two at our gym. Seat back far enough that your knees start at about 90°." }),
+  M("m-leg-curl", "Seated Leg Curl", ["legs"], "isolation", [1, 1, 0], "seated", { knees: 1 }, "3 × 10–12",
+    "Curl your heels down and back under the seat, pause, and take about three seconds to return.",
+    [["knees", "Knee strain from a misaligned machine", "Line your knees up with the machine's pivot point."],
+     ["lowerBack", "Hamstring cramp or lower back strain from jerking", "Smooth reps, no swinging."]],
+    { focus2: ["glutes"], tip: "Knees lined up with the pivot, the lap pad snug on your thighs, the lower pad just above your heels." }),
+  M("m-leg-ext", "Leg Extension", ["legs"], "isolation", [1, 1, 0], "seated", { knees: 2 }, "2–3 × 12–15",
+    "Lift your lower legs until they're nearly straight, pause, and lower slowly.",
+    [["knees", "Kneecap pain, especially with clicking or weak knees", "Light weight, smooth, and stop short of the top if a knee complains. A partial range is fine."]],
+    { tip: "Knees lined up with the pivot, pad on your lower shins just above the ankles." }),
+  M("m-calf", "Calf Extension", ["calves"], "isolation", [1, 1, 0], "seated", { ankles: 2, knees: 1 }, "3 × 12–15",
+    "Balls of your feet on the platform, push it away by pointing your toes, pause, then let your heels come back slowly.",
+    [["ankles", "Achilles and foot strain, and a risk for a healing foot", "Hold off while a foot injury is healing. When you come back to it, use light weight and a short range."],
+     ["knees", "Knee strain from locking out", "Keep a tiny bend in your knees."]],
+    { tip: "Set the seat so your legs are almost straight with only the balls of your feet on the platform. The seated stand-in for the Smith calf raise." })
+];
+
+BUILTIN.push(...MACHINES);
+
 // Fill in defaults so entries typed into the app (machines added later) work like built-in ones.
 export function normalizeLib(e) {
   return {
     focus: [], focus2: [], pattern: "", difficulty: 1, effort: 2, impact: 0, position: "", unilateral: false,
-    joints: {}, sr: "3 × 10", how: e.notes || "", risks: [], kind: "load", db: false, heavy: "", equip: "machine", ...e
+    joints: {}, sr: "3 × 10", how: e.notes || "", risks: [], kind: "load", db: false, heavy: "", tip: "", equip: "machine", ...e
   };
 }
+
+// Which of our machines can stand in for each plan exercise. Shown as "At our gym" buttons on the Workout tab.
+export const PLAN_MACHINES = {
+  "a-mon-cp": ["m-chest-press", "m-mts-chest-press"], "a-mon-inc": ["m-mts-incline"], "a-mon-sp": ["m-shoulder-press", "m-mts-shoulder-press"],
+  "a-mon-push": ["m-triceps-ext", "m-triceps-press"], "a-mon-fly": ["m-pec-fly"],
+  "a-tue-pd": ["m-lat-pulldown", "m-mts-pulldown"], "a-tue-row": ["m-seated-row", "m-mts-row"], "a-tue-pu": ["m-assist"], "a-tue-bext": ["m-back-ext"],
+  "a-tue-rdelt": ["m-rear-delt"], "a-tue-curl": ["m-arm-curl", "m-biceps-curl"],
+  "a-wed-sq": ["m-leg-press"], "a-wed-curl": ["m-leg-curl"], "a-wed-ext": ["m-leg-ext"],
+  "a-thu-goblet": ["m-leg-press"], "a-thu-calf": ["m-calf"],
+  "b-mon-inc": ["m-mts-incline"], "b-mon-fly": ["m-pec-fly"], "b-mon-sp": ["m-shoulder-press", "m-mts-shoulder-press"], "b-mon-dip": ["m-assist", "m-triceps-press"], "b-mon-ohext": ["m-triceps-ext"],
+  "b-tue-cgpd": ["m-mts-pulldown", "m-lat-pulldown"], "b-tue-csrow": ["m-mts-row", "m-seated-row"], "b-tue-bext": ["m-back-ext"], "b-tue-face": ["m-rear-delt"], "b-tue-hammer": ["m-arm-curl", "m-biceps-curl"],
+  "b-wed-lp": ["m-leg-press"], "b-wed-curl": ["m-leg-curl"],
+  "b-thu-rot": ["m-rotary-torso"], "b-thu-hold": ["m-back-ext"], "b-thu-goblet": ["m-leg-press"], "b-thu-calf": ["m-calf"]
+};

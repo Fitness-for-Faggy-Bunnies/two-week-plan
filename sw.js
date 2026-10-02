@@ -1,7 +1,7 @@
 // Offline support: the app shell is cached so it opens with no signal.
 // Workout data is handled separately by Firestore's own offline cache.
 // Bump VERSION whenever you change files, so phones pick up the update.
-const VERSION = "twp-v12";
+const VERSION = "twp-v13";
 const SHELL = [
   "./", "index.html", "css/styles.css",
   "js/app.js", "js/plan.js", "js/stats.js", "js/firebase.js", "js/library.js", "js/fun.js", "js/safety.js", "js/timer.js", "js/a11y.js",

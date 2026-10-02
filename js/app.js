@@ -5,7 +5,7 @@ import * as T from "./timer.js";
 import * as A from "./a11y.js";
 import { safetyFor } from "./safety.js";
 import * as S from "./stats.js";
-import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
+import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, PLAN_MACHINES, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
 import { connect, save, remove, patch, dropField, signOutAndClear, importAll, COLLECTIONS, watchAuth, signInGoogle, signInEmail, createEmailAccount, resetPassword, addGoogle, addPassword, currentInfo,
   getUserDoc, setUserDoc, createCrew, joinCrew, watchCrew, updateMember, removeMember, renameCrew, newInviteCode, readLegacy } from "./firebase.js";
 
@@ -348,6 +348,13 @@ function isOpen(u, date, id, d, force) {
   if (d.sets.some(x => x.done) || T.isActive(`set:${u}|${date}|${id}|${d.sets.findIndex(x => !x.done)}`)) return true;
   return id === state.nextUpId;
 }
+// "At our gym": one tap switches this exercise to one of our purple machines (logged separately, like any library pick).
+function ourMachines(ex, v) {
+  const ids = (PLAN_MACHINES[ex.id] || []).map(libItem).filter(Boolean);
+  if (!ids.length) return "";
+  const cur = String(v).startsWith("lib:") ? v.slice(4) : "";
+  return `<div class="our-machines"><span class="small muted" id="om-${ex.id}">At our gym:</span><div class="row" role="group" aria-labelledby="om-${ex.id}">${ids.map(m => `<button type="button" class="btn small" data-act="useMachine" data-id="${esc(m.id)}" aria-pressed="${cur === m.id}">${esc(m.name)}</button>`).join("")}${cur && ids.some(m => m.id === cur) ? `<button type="button" class="btn small" data-act="variant" data-v="std">Back to plan</button>` : ""}</div></div>`;
+}
 function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) {
   const logged = s?.exercises?.find(e => e.id === ex.id);
   const ek = editKey(u, date, ex.id);
@@ -389,6 +396,8 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
     ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
     ${lib ? `<div class="row"><a class="video" href="${yt(lib.name)}" target="_blank" rel="noopener">Watch form videos</a><button class="btn small" data-act="libSwap">Change machine</button></div>` : ""}
+    ${lib?.tip ? `<div class="small muted"><b>Setup:</b> ${esc(lib.tip)}</div>` : ""}
+    ${ourMachines(ex, v)}
     ${ex.notes?.[u] ? `<div class="note">${esc(ex.notes[u])}</div>` : ""}
     ${smith ? `<div class="small muted">${esc(smith)}</div>` : ""}
     <div class="last">${last ? `Last time (${S.fmtDate(last.date)}): <b>${esc(S.describeSets(last.kind, last.db, last.sets))}</b>` : "No history yet for this version."}</div>
@@ -584,11 +593,13 @@ function drawLibSwap() {
 
 function riskBlock(m) {
   const j = Object.entries(m.joints || {}).filter(([, v]) => v);
-  if (!j.length && !m.risks?.length && !m.heavy) return "";
+  if (!j.length && !m.risks?.length && !m.heavy && !m.tip) return "";
   return `<div class="risk"><h4>Joints and injury risks</h4>
     ${j.length ? `<div class="joint-chips">${j.map(([k, v]) => `<span class="jchip ${v === 2 ? "high" : ""}">${esc(JOINTS[k])}: ${v === 2 ? "high load" : "some load"}</span>`).join("")}</div>` : ""}
     ${m.risks?.length ? `<ul class="risks">${m.risks.map(r => `<li><b>${esc(r.risk)}.</b> ${esc(r.avoid || "")}</li>`).join("")}</ul>` : ""}
     ${m.heavy ? `<p class="small"><b>At our gym (dumbbells to about ${GYM.maxDumbbell} lb):</b> ${esc(m.heavy)}</p>` : ""}
+    ${m.tip ? `<p class="small"><b>Setting up the machine:</b> ${esc(m.tip)}</p>` : ""}
+    ${m.mts ? `<p class="small"><b>MTS:</b> each arm moves on its own. Press or pull with both, or one side at a time to even out a weaker side.</p>` : ""}
     <p class="small muted">General guidance, not medical advice. Sharp or lasting pain is worth a doctor or physical therapist visit.</p></div>`;
 }
 
@@ -1621,6 +1632,10 @@ document.addEventListener("click", e => {
     case "openPicker": openPicker(); break;
     case "libSwap": { const c = cardFor(el); openLibSwap(c.id); break; }
     case "libShowAll": state.libSwapAll = true; drawLibSwap(); break;
+    case "useMachine": {
+      const c = cardFor(el); const vv = `lib:${el.dataset.id}`; const def = defOf(c.ex, vv);
+      putDraft(c.u, c.date, c.id, { variant: vv, ...prefillSets(c.u, { sr: def.sr, kind: def.kind }, c.id, vv) }); render(); A.announce(`Switched to ${def.name}`); break;
+    }
     case "pickLibSwap": {
       const { u, date, id } = state.libSwapFor; const item = todaysList(u, date).find(x => x.ex.id === id); if (!item) break;
       const v = `lib:${el.dataset.id}`; const def = defOf(item.ex, v);

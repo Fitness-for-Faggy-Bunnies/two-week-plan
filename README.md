@@ -26,7 +26,8 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - Personality: Hype, Chill or Just the numbers. Fun level: Light (record celebrations, badges), Medium (+ streaks, progress ring, finish screen, high-fives), Full (+ points, levels, weekly leaderboard).
 
 **Gym library (Gym tab)**
-- 56 built-in dumbbell exercises (in `js/library.js`), plus anything you add. Machines get added here later.
+- 56 built-in dumbbell exercises and our gym's 23 purple machines (in `js/library.js`), plus anything you add. Machines come with setup tips; MTS machines note that each arm moves on its own.
+- Plan exercises show "At our gym" buttons that switch to the matching machine in one tap.
 - Each one is tagged with equipment, focus, movement (push, pull, squat, hinge, lunge, carry…), position, difficulty, effort, impact, one-side-at-a-time, joint load on eight areas, and specific injury risks with how to avoid them.
 - Filter by any of those, search, and sort by name, difficulty, effort or impact.
 - Sore spots: tap what aches today and exercises that load it heavily are hidden or flagged, here and in swaps.
