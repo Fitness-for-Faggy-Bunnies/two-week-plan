@@ -130,7 +130,11 @@ Object.keys(localStorage).filter(k => k.startsWith("twp-draft-")).forEach(k => s
 
 const cycleStart = () => state.data.settings.find(s => s.id === "app")?.cycleStart || "2026-09-28";
 const LU = () => state.logUser || state.user;
-const LD = () => state.logDate || TODAY();
+// The day you're logging for (today unless you picked another date).
+const BASE_DATE = () => state.logDate || TODAY();
+// On the Workout tab, the date of the workout you're looking at: if this week/day was already logged in this
+// cycle, that day's date; otherwise the logging date. Keeps each week's workouts separate.
+const LD = () => (state.sel ? sessionFor(LU(), BASE_DATE())?.date : null) || BASE_DATE();
 
 function autoSel() {
   const t = TODAY(); const dow = new Date().getDay();
@@ -140,15 +144,26 @@ function autoSel() {
 }
 const variantOf = (u, ex) => state.variants[`${u}:${ex.id}`] || (P(u).defaultVariant === "hard" && ex.h ? "hard" : "std");
 
-// ---------------------------------------------------------------- sessions: one document per person per day
-const sid = (u, date) => `${u}_${date}`;
-const sessionFor = (u, date) => state.data.sessions.find(s => s.id === sid(u, date)) || state.data.sessions.find(s => s.user === u && s.date === date) || null;
+// ---------------------------------------------------------------- sessions: one document per person per plan day
+// Each workout belongs to a plan slot (Week A Monday, Week B Tuesday, ...) within a two-week cycle.
+// Week A's Monday and Week B's Tuesday stay separate even if both are logged on the same date.
+// Older records used the id "<person>_<date>"; new ones add the slot. Both are found the same way.
+const slotKey = (sel = state.sel) => (sel ? `${sel.week}${sel.day}` : "");
+const sid = (u, date, sel = state.sel) => `${u}_${date}_${slotKey(sel)}`;
+function sessionFor(u, date, sel = state.sel) {
+  if (!sel) return state.data.sessions.find(s => s.user === u && s.date === date) || null;
+  const cyc = S.cycleInfo(date, cycleStart());
+  const hits = state.data.sessions.filter(s => s.user === u && s.week === sel.week && s.day === sel.day && s.date >= cyc.start && s.date <= cyc.end);
+  return hits.find(s => s.date === date) || hits.sort((a, b) => b.date.localeCompare(a.date) || (b.updatedAt || 0) - (a.updatedAt || 0))[0] || null;
+}
+// Something else (another week/day) was logged on this date: used so today's bike commute doesn't show on other days.
+const otherSlotOn = (u, date) => state.data.sessions.some(s => s.user === u && s.date === date && (s.week !== state.sel?.week || s.day !== state.sel?.day));
 
 // Only the changed fields are sent, so a partner logging on another phone can't wipe out what you saved.
 function writeSession(u, date, fields) {
   const cur = sessionFor(u, date);
-  const ident = !cur || cur.id !== sid(u, date) ? { user: u, date, week: cur?.week || state.sel.week, day: cur?.day || state.sel.day } : {};
-  patch("sessions", sid(u, date), { ...ident, ...fields });
+  if (cur) { patch("sessions", cur.id, fields); return; }
+  patch("sessions", sid(u, date), { user: u, date, week: state.sel.week, day: state.sel.day, ...fields });
 }
 // Exercises are stored as a map keyed by exercise id (ex.<id>); older records used an array. Readers get one sorted array.
 function normalizeSession(s) {
@@ -164,10 +179,11 @@ let merging = false;
 function consolidate() {
   if (merging || state.flags.sessions?.fromCache) return;
   const groups = {};
-  for (const s of state.data.sessions) (groups[`${s.user}|${s.date}`] ||= []).push(s);
+  for (const s of state.data.sessions) (groups[`${s.user}|${s.date}|${s.week}|${s.day}`] ||= []).push(s);
   for (const docs of Object.values(groups)) {
     const { user, date } = docs[0];
-    if (docs.length === 1 && docs[0].id === sid(user, date)) continue;
+    if (docs.length === 1) continue;
+    const keep = docs.find(d => d.id === `${user}_${date}`)?.id || sid(user, date, { week: docs[0].week, day: docs[0].day });
     merging = true;
     docs.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
     const ex = new Map();
@@ -179,8 +195,8 @@ function consolidate() {
     const merged = { user, date, week: docs[0].week, day: docs[0].day, exercises: [], ex: exMap, cardio, pain: latest("pain") || null, recovery: latest("recovery") || null, notes };
     if (merged.pain || merged.recovery || notes) merged.checkin = true;
     // Merge rather than overwrite, in case the other phone saved something to this day a moment ago.
-    patch("sessions", sid(user, date), merged);
-    for (const d of docs) if (d.id !== sid(user, date)) remove("sessions", d.id);
+    patch("sessions", keep, merged);
+    for (const d of docs) if (d.id !== keep) remove("sessions", d.id);
   }
   merging = false;
 }
@@ -254,7 +270,7 @@ function render() {
   const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user) + esc(P(state.user).name) + (state.partner ? " + " + esc(P(other(state.user)).name) : "");
   document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   if (!state.sel) {
-    const s = sessionFor(LU(), LD());
+    const s = sessionFor(LU(), BASE_DATE(), null);
     state.sel = s && s.week && s.day ? { week: s.week, day: s.day } : autoSel();
   }
   if (!state.viewUser || !profileIds().includes(state.viewUser) || !canSee(state.viewUser)) state.viewUser = state.user;
@@ -294,7 +310,7 @@ function viewToday() {
   const partner = other(u);
   return `
   ${state.partner ? `<section class="card"><span class="eyebrow">Partner mode · logging for</span>${personToggle("logUser", u)}</section>` : ""}
-  ${notToday ? `<div class="banner">Showing ${S.fmtDate(date)}. <button class="btn small" data-act="backToToday">Back to today</button></div>` : ""}
+  ${state.logDate ? `<div class="banner">Logging for ${S.fmtDate(date)}. <button class="btn small" data-act="backToToday">Back to today</button></div>` : notToday ? `<div class="banner">Week ${esc(week)} ${esc(DAY_NAMES[day])} was logged on ${S.fmtDate(date)}.</div>` : ""}
   ${rem.length && !focusOn() ? `<section class="reminders" aria-label="Reminders">${rem.map(r => `<div class="rem"><span>${esc(r.text)}</span><span class="row"><button class="btn small" data-act="goView" data-v="${r.view}">Open</button><button class="btn small" data-act="dismissRem" data-v="${r.id}" aria-label="Remind me tomorrow">✕</button></span></div>`).join("")}</section>` : ""}
   ${dl ? `<div class="banner"><b>Lighter week</b> until ${S.fmtDate(deloadOf(u).to)}: about 60% of your usual weights and one less set. <button class="btn small" data-act="endDeload">End it early</button></div>` : dlSug ? `<div class="banner">${esc(dlSug)} <button class="btn small" data-act="startDeload">Start a lighter week</button></div>` : ""}
   <section class="card">
@@ -476,13 +492,13 @@ function stepper(f, val, label, step, name = label) {
 function cardioCard(u, date, s) {
   const { week, day } = state.sel; const cp = cardioProgram(u).plan(week, day);
   const ek = editKey(u, date, "cardio");
-  const commute = state.data.activities.find(a => a.id === `${u}-${date}-commute`);
+  const commute = s || !otherSlotOn(u, date) ? state.data.activities.find(a => a.id === `${u}-${date}-commute`) : null;
   if ((s?.cardio?.done || s?.cardio?.skipped) && !state.editing.has(ek)) {
     const c = s.cardio;
     return `<section class="card cardio-card done-card"><div class="head"><h3 class="name"><span class="tick" aria-hidden="true">✓</span><span class="visually-hidden">Done: </span>Cardio</h3><button class="btn small" data-act="editCardio">Log</button></div>
       <div class="last"><b>${c.skipped ? "Skipped: biked to work" : `${esc(c.type)}, ${c.minutes || 0} min${c.miles ? `, ${c.miles} mi` : ""}${c.avgHr ? `, avg HR ${c.avgHr}` : ""}${c.hiit ? ", intervals" : ""}`}</b>${commute ? ` · Bike commute ${commute.miles} mi` : ""}</div></section>`;
   }
-  const c = store.get(`twp-c-${u}-${date}`, null) || { type: s?.cardio?.type || cp.type, minutes: s?.cardio?.minutes ?? 25, miles: s?.cardio?.miles ?? "", avgHr: s?.cardio?.avgHr ?? "", hiit: s?.cardio?.hiit ?? !!cp.hiit, commute: !!commute, commuteMiles: commute?.miles ?? PROFILES[u].commute.miles };
+  const c = store.get(`twp-c-${u}-${date}-${slotKey()}`, null) || { type: s?.cardio?.type || cp.type, minutes: s?.cardio?.minutes ?? 25, miles: s?.cardio?.miles ?? "", avgHr: s?.cardio?.avgHr ?? "", hiit: s?.cardio?.hiit ?? !!cp.hiit, commute: !!commute, commuteMiles: commute?.miles ?? PROFILES[u].commute.miles };
   const partner = state.partner ? cardioProgram(other(u)).plan(week, day) : null;
   return `<section class="card cardio-card" id="cardio-form">
     <div class="between"><h3 class="h3">Cardio · ${esc(cp.type)}</h3>${cp.hiit ? `<span class="tag new">Intervals</span>` : ""}</div>
@@ -514,7 +530,7 @@ function checkinCard(u, date, s) {
     return `<section class="card done-card"><div class="head"><h3 class="name"><span class="tick" aria-hidden="true">✓</span><span class="visually-hidden">Done: </span>Check-in</h3><button class="btn small" data-act="editCheckin">Log</button></div>
       <div class="last">Pain: ${esc(pain)}</div><div class="last">Sleep ${r.sleep || "–"} · Energy ${r.energy || "–"} · Soreness ${r.soreness || "–"}</div>${s.notes ? `<div class="last">${esc(s.notes)}</div>` : ""}</section>`;
   }
-  const k = store.get(`twp-k-${u}-${date}`, null) || { pain: { ...Object.fromEntries(PROFILES[u].pain.map(a => [a, 0])), ...(s?.pain || {}) }, recovery: { sleep: 0, energy: 0, soreness: 0, ...(s?.recovery || {}) }, notes: s?.notes || "" };
+  const k = store.get(`twp-k-${u}-${date}-${slotKey()}`, null) || { pain: { ...Object.fromEntries(PROFILES[u].pain.map(a => [a, 0])), ...(s?.pain || {}) }, recovery: { sleep: 0, energy: 0, soreness: 0, ...(s?.recovery || {}) }, notes: s?.notes || "" };
   const row = (key, l, lo, hi) => `<div class="field"><span>${l} <span class="small">(1 ${lo} · 5 ${hi})</span></span><div class="scale" role="group" aria-label="${l}">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-act="scale" data-k="${key}" data-n="${n}" aria-pressed="${+k.recovery[key] === n}">${n}</button>`).join("")}</div></div>`;
   return `<section class="card" id="checkin-form"><h3 class="h3">Check-in: pain &amp; how you feel</h3>
     <p class="small muted">0 is nothing, 10 is stop-everything. Log zeros too, so healing shows on the chart.</p>
@@ -1516,21 +1532,21 @@ function saveCardio(skip) {
     if (on) save("activities", cid, { user: u, date, type: "Bike commute", miles: +(val("commuteMiles")?.value || PROFILES[u].commute.miles) || 0 });
     else if (state.data.activities.find(a => a.id === cid)) remove("activities", cid);
   }
-  store.del(`twp-c-${u}-${date}`); state.editing.delete(editKey(u, date, "cardio"));
+  store.del(`twp-c-${u}-${date}-${slotKey()}`); state.editing.delete(editKey(u, date, "cardio"));
   toast(skip ? "Logged your bike commute." : "Saved cardio.");
 }
 function saveCheckin() {
-  const u = LU(), date = LD(); const k = store.get(`twp-k-${u}-${date}`, null);
+  const u = LU(), date = LD(); const k = store.get(`twp-k-${u}-${date}-${slotKey()}`, null);
   const form = $("#checkin-form");
   const pain = {}; form.querySelectorAll("[data-kf^='pain.']").forEach(i => { pain[i.dataset.kf.slice(5)] = +i.value || 0; });
   const recovery = k?.recovery || sessionFor(u, date)?.recovery || { sleep: 0, energy: 0, soreness: 0 };
   writeSession(u, date, { pain, recovery, notes: form.querySelector("[data-kf=notes]").value, checkin: true });
-  store.del(`twp-k-${u}-${date}`); state.editing.delete(editKey(u, date, "checkin"));
+  store.del(`twp-k-${u}-${date}-${slotKey()}`); state.editing.delete(editKey(u, date, "checkin"));
   toast("Saved check-in.");
 }
 function checkinDraft() {
   const u = LU(), date = LD(); const s = sessionFor(u, date);
-  return store.get(`twp-k-${u}-${date}`, null) || { pain: { ...(s?.pain || {}) }, recovery: { sleep: 0, energy: 0, soreness: 0, ...(s?.recovery || {}) }, notes: s?.notes || "" };
+  return store.get(`twp-k-${u}-${date}-${slotKey()}`, null) || { pain: { ...(s?.pain || {}) }, recovery: { sleep: 0, energy: 0, soreness: 0, ...(s?.recovery || {}) }, notes: s?.notes || "" };
 }
 
 // Changing a set also changes the sets after it that had the same value, so set 1 fills the rest.
@@ -1758,7 +1774,7 @@ document.addEventListener("click", e => {
     case "editCardio": state.editing.add(editKey(LU(), LD(), "cardio")); render(); break;
     case "editCheckin": state.editing.add(editKey(LU(), LD(), "checkin")); render(); break;
     case "scale": {
-      const k = checkinDraft(); k.recovery[el.dataset.k] = +el.dataset.n; store.set(`twp-k-${LU()}-${LD()}`, k);
+      const k = checkinDraft(); k.recovery[el.dataset.k] = +el.dataset.n; store.set(`twp-k-${LU()}-${LD()}-${slotKey()}`, k);
       el.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === el)); break;
     }
     case "saveCheckin": saveCheckin(); focusSaved(); render(); break;
@@ -1822,11 +1838,11 @@ document.addEventListener("input", e => {
   } else if (el.dataset.cf) {
     const form = $("#cardio-form"); const d = {};
     form.querySelectorAll("[data-cf]").forEach(i => { d[i.dataset.cf] = i.type === "checkbox" ? i.checked : i.value; });
-    store.set(`twp-c-${LU()}-${LD()}`, d);
+    store.set(`twp-c-${LU()}-${LD()}-${slotKey()}`, d);
   } else if (el.dataset.kf) {
     const k = checkinDraft(); const f = el.dataset.kf;
     if (f === "notes") k.notes = el.value; else { k.pain[f.slice(5)] = +el.value; const out = document.querySelector(`[data-out="${f}"]`); if (out) out.textContent = el.value; }
-    store.set(`twp-k-${LU()}-${LD()}`, k);
+    store.set(`twp-k-${LU()}-${LD()}-${slotKey()}`, k);
   } else if (el.dataset.act === "libQ") {
     state.libF.q = el.value; store.set("twp-libf", state.libF); const pos = el.selectionStart; render();
     const q = $("#lib-q"); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
