@@ -11,6 +11,8 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, r = document) => r.querySelector(s);
+// "a", "a and b", "a, b, and c" (Oxford comma)
+const listText = (xs, word = "and") => xs.length < 3 ? xs.join(` ${word} `) : `${xs.slice(0, -1).join(", ")}, ${word} ${xs[xs.length - 1]}`;
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -293,7 +295,7 @@ function viewToday() {
     <div class="chips" role="group" aria-label="Day">${DAYS.map(d => `<button data-act="selDay" data-v="${d}" aria-pressed="${d === day}">${d}<small>${esc(dayTitle(u, week, d).split(",")[0])}</small></button>`).join("")}</div>
     <div class="ring-row">${funAt("medium") ? ring(done, list.length) + `<span class="visually-hidden">${done} of ${list.length} exercises done.</span>` : ""}<div style="min-width:0;flex:1"><h2 class="h2">${DAY_NAMES[day]} · ${esc(dayTitle(u, week, day))}</h2>${funHeader(u)}</div></div>
     ${workoutBar(u, date, s)}
-    <details class="more"><summary>${esc(p.name)}'s focus, notes and date</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${(p.notes || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+    <details class="more"><summary>${esc(p.name)}'s focus, notes, and date</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${(p.notes || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
       <label class="field">Logging date<input type="date" data-act="logDate" value="${date}"></label></div></details>
     <div class="row"><button class="btn small" data-act="planEdit" aria-pressed="${!!state.planEdit}">${state.planEdit ? "Done editing plan" : "Edit this day's plan"}</button>
       ${funAt("medium") && partner !== u ? `<button class="btn small" data-act="hi5">🙌 High-five ${esc(P(partner).name)}</button>` : ""}</div>
@@ -316,10 +318,10 @@ const focusSaved = () => { if (focusOn()) { state.focusAfter = state.focusIdx ??
 const focusOn = () => A.get().focusMode && !state.focusAll && !state.planEdit;
 function focusSteps(u, date, s, list) {
   const steps = [
-    { name: "Warm-up", done: !!s?.warmup, html: () => warmupCard(u, date, s, list) },
-    { name: "Cardio", done: !!(s?.cardio?.done || s?.cardio?.skipped), html: () => cardioCard(u, date, s) },
-    ...list.map(({ ex, added }, i) => ({ name: defOf(ex, variantOf(u, ex)).name, done: !!s?.exercises?.some(e => e.id === ex.id), html: () => exerciseCard(u, date, ex, added, s, i, list.length, { forceOpen: true }) })),
-    { name: "Check-in", done: !!s?.checkin, html: () => checkinCard(u, date, s) }
+    { name: "Warm-up", chip: "W", done: !!s?.warmup, html: () => warmupCard(u, date, s, list) },
+    { name: "Cardio", chip: "C", done: !!(s?.cardio?.done || s?.cardio?.skipped), html: () => cardioCard(u, date, s) },
+    ...list.map(({ ex, added }, i) => ({ name: `Exercise ${i + 1}: ${defOf(ex, variantOf(u, ex)).name}`, chip: String(i + 1), ex: i + 1, done: !!s?.exercises?.some(e => e.id === ex.id), html: () => exerciseCard(u, date, ex, added, s, i, list.length, { forceOpen: true }) })),
+    { name: "Check-in", chip: "✎", done: !!s?.checkin, html: () => checkinCard(u, date, s) }
   ];
   // After saving a step, go to the next unfinished step after it (then wrap around to any skipped ones).
   const after = state.focusAfter ?? -1;
@@ -330,8 +332,8 @@ function focusSteps(u, date, s, list) {
   state.focusIdx = i; state.focusCount = steps.length;
   const left = steps.filter(x => !x.done).length;
   return `<section class="card focus-head" aria-label="One step at a time">
-      <div class="between"><span class="eyebrow">Step ${i + 1} of ${steps.length}</span><button class="btn small" data-act="focusAll">Show everything</button></div>
-      <ol class="focus-steps">${steps.map((x, j) => `<li class="${x.done ? "done" : ""} ${j === i ? "now" : ""}"><button type="button" data-act="focusGo" data-n="${j}" aria-current="${j === i ? "step" : "false"}" aria-label="${esc(x.name)}${x.done ? ", done" : ""}">${x.done ? "✓" : j + 1}</button></li>`).join("")}</ol>
+      <div class="between"><span class="eyebrow">${steps[i].ex ? `Exercise ${steps[i].ex} of ${list.length}` : steps[i].name} · step ${i + 1} of ${steps.length}</span><button class="btn small" data-act="focusAll">Show everything</button></div>
+      <ol class="focus-steps">${steps.map((x, j) => `<li class="${x.done ? "done" : ""} ${j === i ? "now" : ""}"><button type="button" data-act="focusGo" data-n="${j}" aria-current="${j === i ? "step" : "false"}" aria-label="${esc(x.name)}${x.done ? ", done" : ""}">${esc(x.chip)}</button></li>`).join("")}</ol>
       <p class="small muted">${left ? `${left} step${left === 1 ? "" : "s"} left today.` : "Everything's done today."}</p>
     </section>
     ${steps[i].html()}
@@ -361,7 +363,7 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   if (logged && !state.editing.has(ek)) {
     const def = S.defFor(ex.id, logged.variant || "std", logged);
     return `<article class="card ex done-card" id="ex-${ex.id}">
-      <div class="head"><h3 class="name"><span class="tick" aria-hidden="true">✓</span><span class="visually-hidden">Done: </span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${vLabel(logged.variant)}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</h3><button class="btn small" data-act="editEx" data-ex="${ex.id}">Log</button></div>
+      <div class="head"><h3 class="name"><span class="tick" aria-hidden="true">✓</span>${count ? `<span class="ex-num done" aria-hidden="true">${idx + 1}</span>` : ""}<span class="visually-hidden">Done${count ? `, exercise ${idx + 1} of ${count}` : ""}: </span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${vLabel(logged.variant)}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</h3><button class="btn small" data-act="editEx" data-ex="${ex.id}">Log</button></div>
       <div class="last"><b>${esc(S.setsText(logged))}</b></div>
     </article>`;
   }
@@ -383,16 +385,17 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   const tags = `${ex.custom || lib ? "" : ex.lib ? `<span class="tag orig">Library</span>` : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}`;
   const open = isOpen(u, date, ex.id, d, cardOpts.forceOpen);
   const checked = d.sets.filter(x => x.done).length;
-  const head = `<div class="head"><h3 class="name"><button type="button" class="ex-toggle" data-act="toggleEx" aria-expanded="${open}" aria-controls="exb-${ex.id}"><span class="chev" aria-hidden="true"></span><span>${esc(def.name)}</span>${tags}</button></h3><span class="sr">${esc(target || "")}</span></div>`;
+  const num = count ? `<span class="ex-num" aria-hidden="true">${idx + 1}</span><span class="visually-hidden">Exercise ${idx + 1} of ${count}: </span>` : "";
+  const head = `<div class="head"><h3 class="name"><button type="button" class="ex-toggle" data-act="toggleEx" aria-expanded="${open}" aria-controls="exb-${ex.id}"><span class="chev" aria-hidden="true"></span>${num}<span class="ex-title">${esc(def.name)}${tags}</span></button></h3><span class="sr">${esc(target || "")}</span></div>`;
   if (!open) {
     const tmr = T.isActive(`set:${u}|${date}|${ex.id}|${d.sets.findIndex(x => !x.done)}`);
     return `<article class="card ex collapsed" id="ex-${ex.id}" data-ex="${ex.id}">${head}
-      <div class="ex-mini small">${checked ? `<b>${checked} of ${d.sets.length} sets checked</b> · ` : ""}${tmr ? "<b>⏱ Timer running</b> · " : ""}${last ? `Last time: ${esc(S.describeSets(last.kind, last.db, last.sets))}` : "No history yet"}${sore.high.length ? ` · <span class="warn-text">Hard on your ${esc(sore.high.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today</span>` : ""}</div>
+      <div class="ex-mini small">${checked ? `<b>${checked} of ${d.sets.length} sets checked</b> · ` : ""}${tmr ? "<b>⏱ Timer running</b> · " : ""}${last ? `Last time: ${esc(S.describeSets(last.kind, last.db, last.sets))}` : "No history yet"}${sore.high.length ? ` · <span class="warn-text">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today</span>` : ""}</div>
     </article>`;
   }
   return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
     ${head}<div class="ex-body" id="exb-${ex.id}">
-    ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(sore.high.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today. Consider a swap.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(sore.some.map(j => (JOINTS[j] || j).toLowerCase()).join(" and "))} today.</div>` : ""}
+    ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today. Consider a swap.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(listText(sore.some.map(j => (JOINTS[j] || j).toLowerCase())))} today.</div>` : ""}
     ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
     ${lib ? `<div class="row"><a class="video" href="${yt(lib.name)}" target="_blank" rel="noopener">Watch form videos</a><button class="btn small" data-act="libSwap">Change machine</button></div>` : ""}
@@ -413,18 +416,22 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
       <div class="row"><button class="btn small" data-act="planMove" data-v="-1" ${idx === 0 ? "disabled" : ""} aria-label="Move up">↑</button><button class="btn small" data-act="planMove" data-v="1" ${idx >= count - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
       <label class="field" style="flex:1;min-width:120px">Target<input type="text" data-act="planSr" value="${esc(target)}"></label>
       <button class="btn small danger" data-act="planRemove">Remove</button></div></div>` : ""}
-    ${ex.custom ? "" : `<details class="more"><summary>Form, video, risks &amp; stretches</summary>${exPanel(ex, safety)}</details>`}
+    ${ex.custom ? "" : `<details class="more"><summary>How-to, video, risks, and stretches</summary>${exPanel(ex, safety, v, lib, why)}</details>`}
   </div></article>`;
 }
 
-function exPanel(ex, safety) {
+// Only the version picked at the top of the tile: its how-to, video, and risks. Then the stretches.
+function exPanel(ex, safety, v, lib, why) {
+  const pick = lib ? { n: lib.name, how: lib.how, q: lib.name }
+    : v === "hard" && ex.h ? { n: ex.h.n, how: ex.h.how, q: ex.h.q }
+    : v === "swap" && ex.swap ? { n: ex.swap.n, how: ex.swap.how, q: ex.swap.q }
+    : { n: ex.n, how: ex.setup, q: ex.q };
+  const showHow = pick.how && pick.how !== why;
   return `<div class="panel">
-    <div><h4>How to do it · ${esc(ex.n)}</h4><p>${esc(ex.setup)}</p><a class="video" href="${yt(ex.q)}" target="_blank" rel="noopener">Watch form videos</a></div>
+    <div><h4>How to do it · ${esc(pick.n)}</h4>${showHow ? `<p>${esc(pick.how)}</p>` : ""}<a class="video" href="${yt(pick.q)}" target="_blank" rel="noopener">Watch form videos</a></div>
     ${safety ? riskBlock(safety) : ""}
-    ${ex.h ? `<div><h4>Harder · ${esc(ex.h.n)} · ${esc(ex.h.sr)}</h4><p>${esc(ex.h.how)}</p><a class="video" href="${yt(ex.h.q)}" target="_blank" rel="noopener">Watch form videos</a></div>` : ""}
-    ${ex.swap ? `<div><h4>Swap · ${esc(ex.swap.n)}${ex.swap.sr ? ` · ${esc(ex.swap.sr)}` : ""}</h4><p>${esc(ex.swap.how)}</p><a class="video" href="${yt(ex.swap.q)}" target="_blank" rel="noopener">Watch form videos</a></div>` : ""}
-    ${ex.v ? `<div><h4>More lunge types to rotate in</h4><div class="panel">${ex.v.map(x => `<div class="stretch"><b>${esc(x.n)}</b><p>${esc(x.h)}</p><a href="${yt(x.q)}" target="_blank" rel="noopener">Video</a></div>`).join("")}</div></div>` : ""}
-    <div><h4>Between sets, while your partner's up</h4><div class="panel">${ex.s.map(stretchBox).join("")}</div></div>
+    ${ex.v && !lib && v !== "swap" ? `<details class="more sub"><summary>Other lunge types to rotate in</summary><div class="panel">${ex.v.map(x => `<div class="stretch"><b>${esc(x.n)}</b><p>${esc(x.h)}</p><a href="${yt(x.q)}" target="_blank" rel="noopener">Video</a></div>`).join("")}</div></details>` : ""}
+    <div><h4>Stretches between sets</h4><div class="panel">${ex.s.map(stretchBox).join("")}</div></div>
   </div>`;
 }
 function stretchBox(k) {
@@ -580,11 +587,11 @@ function drawLibSwap() {
     return `<button class="list-btn" data-act="pickLibSwap" data-id="${esc(m.id)}"><b>${esc(m.name)}</b>
       <span class="small muted">${esc([EQUIP[m.equip], (m.focus || []).map(f => FOCUS[f]).join(", "), same ? `same movement (${PATTERN[m.pattern]})` : ""].filter(Boolean).join(" · "))}</span>
       <span class="small muted">Difficulty ${dots(m.difficulty)} · Effort ${dots(m.effort)} · Impact ${LEVEL.impact[m.impact || 0]}</span>
-      ${c.high.length ? `<span class="small bad">Hard on your ${esc(c.high.map(j => JOINTS[j].toLowerCase()).join(" and "))}</span>` : c.some.length ? `<span class="small warn-text">Some load on your ${esc(c.some.map(j => JOINTS[j].toLowerCase()).join(" and "))}</span>` : ""}</button>`;
+      ${c.high.length ? `<span class="small bad">Hard on your ${esc(listText(c.high.map(j => JOINTS[j].toLowerCase())))}</span>` : c.some.length ? `<span class="small warn-text">Some load on your ${esc(listText(c.some.map(j => JOINTS[j].toLowerCase())))}</span>` : ""}</button>`;
   };
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Swap from library"><div class="inner">
     <div class="between"><h2 class="h2">Swap from library</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
-    <p class="muted">Instead of <b>${esc(ex.n)}</b>${pattern ? ` (${esc(PATTERN[pattern].toLowerCase())})` : ""}, which works ${esc(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase()).join(" and "))}. Same target: ${esc(ex.sr)}. Best matches first.</p>
+    <p class="muted">Instead of <b>${esc(ex.n)}</b>${pattern ? ` (${esc(PATTERN[pattern].toLowerCase())})` : ""}, which works ${esc(listText(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase())))}. Same target: ${esc(ex.sr)}. Best matches first.</p>
     ${aches(u).length ? `<p class="small">Sore today: ${esc(aches(u).map(j => JOINTS[j]).join(", "))}. Change this on the Gym tab.</p>` : ""}
     <section class="card"><div class="pick-list">${ok.length ? ok.map(btn).join("") : `<p class="muted small">No matches in the library yet.</p>`}</div></section>
     ${sore.length ? `<section class="card"><h3 class="h3">Hard on your sore areas</h3><div class="pick-list">${sore.map(btn).join("")}</div></section>` : ""}
@@ -665,7 +672,7 @@ function libCard(m, u) {
     <div class="small muted">${esc([EQUIP[m.equip], PATTERN[m.pattern], POSITION[m.position], m.unilateral ? "One side at a time" : ""].filter(Boolean).join(" · "))}</div>
     <div class="small"><b>${esc((m.focus || []).map(f => FOCUS[f]).join(", "))}</b>${m.focus2?.length ? `<span class="muted"> · also ${esc(m.focus2.map(f => FOCUS[f].toLowerCase()).join(", "))}</span>` : ""}</div>
     <div class="meters small"><span>Difficulty <b class="mono">${dots(m.difficulty)}</b></span><span>Effort <b class="mono">${dots(m.effort)}</b></span><span>Impact <b>${LEVEL.impact[m.impact || 0]}</b></span></div>
-    ${c.high.length ? `<div class="pill hold">Hard on your ${esc(c.high.map(j => JOINTS[j].toLowerCase()).join(" and "))} today.</div>` : c.some.length ? `<div class="small warn-text">Some load on your ${esc(c.some.map(j => JOINTS[j].toLowerCase()).join(" and "))}.</div>` : ""}
+    ${c.high.length ? `<div class="pill hold">Hard on your ${esc(listText(c.high.map(j => JOINTS[j].toLowerCase())))} today.</div>` : c.some.length ? `<div class="small warn-text">Some load on your ${esc(listText(c.some.map(j => JOINTS[j].toLowerCase())))}.</div>` : ""}
     <details class="more"><summary>How to, risks &amp; video</summary><div class="panel">
       ${m.how ? `<p>${esc(m.how)}</p>` : ""}
       <a class="video" href="${yt(m.name)}" target="_blank" rel="noopener">Watch form videos</a>
@@ -727,7 +734,7 @@ function saveLibrary() {
 function planEditBox(u, week, day) {
   const edits = dayEdits(u, week, day);
   const removed = edits.remove.map(id => ALL_EX[id]).filter(Boolean);
-  return `<div class="banner">Editing ${esc(P(u).name)}'s plan for Week ${week} ${DAY_NAMES[day]}. Move, retarget or remove exercises on each card below.</div>
+  return `<div class="banner">Editing ${esc(P(u).name)}'s plan for Week ${week} ${DAY_NAMES[day]}. Move, retarget, or remove exercises on each card below.</div>
     <label class="field">Day name<input type="text" data-act="planTitle" value="${esc(dayTitle(u, week, day))}"></label>
     ${removed.length ? `<div class="field"><span>Removed from this day</span>${removed.map(e => `<div class="list-item"><span>${esc(e.n)}</span><button class="btn small" data-act="planRestore" data-id="${e.id}">Put back</button></div>`).join("")}</div>` : ""}
     <div class="row"><button class="btn small" data-act="planFromLib">+ Add from the library</button>
@@ -770,7 +777,7 @@ const THEMES = {
   clean: { name: "Clean Light", desc: "Calm and bright.", sw: ["#f5f6f8", "#3563e9", "#e0662e"] }
 };
 const AVATARS = ["🐺", "🦊", "🐻", "🦁", "🐯", "🦍", "🐂", "🦅", "🐉", "🦈", "🐙", "🦄", "🔥", "⚡", "💪", "🏋️", "🚲", "🌙", "⭐", "🎧"];
-const FUN_LEVELS = { light: "Light: record celebrations and badges", medium: "Medium: plus streaks, progress ring, finish screen and high-fives", full: "Full: plus points, levels and a weekly leaderboard" };
+const FUN_LEVELS = { light: "Light: record celebrations and badges", medium: "Medium: plus streaks, progress ring, finish screen, and high-fives", full: "Full: plus points, levels, and a weekly leaderboard" };
 const funAt = (lvl, u = state.user) => ({ light: 1, medium: 2, full: 3 })[P(u).fun || "medium"] >= ({ light: 1, medium: 2, full: 3 })[lvl];
 
 function applyAppearance() {
@@ -1030,7 +1037,7 @@ function openSettings() {
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Settings"><div class="inner">
     <div class="between"><h2 class="h2">Settings</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
     <section class="card"><h3 class="h3">Accessibility</h3>
-      <p class="small">${a11yOn() ? `${a11yOn()} option${a11yOn() === 1 ? "" : "s"} changed.` : "Text size, contrast, reading fonts, spoken timers, screen flashes, one-step-at-a-time and more."}</p>
+      <p class="small">${a11yOn() ? `${a11yOn()} option${a11yOn() === 1 ? "" : "s"} changed.` : "Text size, contrast, reading fonts, spoken timers, screen flashes, one-step-at-a-time, and more."}</p>
       <button class="btn primary" data-act="openA11y">Accessibility options</button></section>
     ${crewSettings()}
     <section class="card"><h3 class="h3">Who's using this phone</h3>${personToggle("pickUser", u)}
@@ -1093,15 +1100,15 @@ function drawA11y() {
       ${tog("bold", "Bold text", "Heavier letters everywhere.")}
       ${tog("bigTargets", "Bigger buttons", "Every button and box at least 52 points tall, with more space between them.")}
       ${tog("underline", "Underline links", "So links don't rely on color.")}
-      ${tog("focusRing", "Strong focus outline", "A thick, high-visibility outline on whatever is selected, for keyboards, switches and screen readers.")}
+      ${tog("focusRing", "Strong focus outline", "A thick, high-visibility outline on whatever is selected, for keyboards, switches, and screen readers.")}
       ${tog("colorSafe", "Color-blind-safe colors", "Blue and orange instead of green and red, plus symbols on selected buttons and initials on calendar dots.")}</section>
     <section class="card"><h3 class="h3">Reading</h3>
       ${choice("font", Object.entries(L.font).map(([v, l]) => [v, l, fonts[v]]), "Font")}
-      ${choice("spacing", Object.entries(L.spacing), "Space between letters, words and lines")}
+      ${choice("spacing", Object.entries(L.spacing), "Space between letters, words, and lines")}
       ${tog("plain", "Plain text style", "No italics, no ALL CAPS, no stretched letters. Everything left-aligned.")}
       ${A.canSpeak() ? tog("readAloud", "Read-aloud buttons", "A 🔊 button on every exercise and stretch reads the instructions out loud.") : ""}</section>
     <section class="card"><h3 class="h3">Hearing</h3>
-      ${tog("flash", "Flash the screen for timers", "A gentle color pulse on 3, 2, 1, GO and when time is up, with the word in big letters. One pulse at a time, never strobing.")}
+      ${tog("flash", "Flash the screen for timers", "A gentle color pulse on 3, 2, 1, and GO, and when time is up, with the word in big letters. One pulse at a time, never strobing.")}
       ${a.flash ? `<button type="button" class="btn small" data-act="a11yTestFlash">Show me</button>` : ""}
       ${tog("captions", "Captioned videos", "Form-video links only look for videos with captions (CC).")}
       ${tog("vibrate", "Vibrate with timers", "Buzzes on the countdown and when time is up. Works on Android; iPhone web apps can't vibrate.")}
@@ -1114,7 +1121,7 @@ function drawA11y() {
       ${tog("focusMode", "One step at a time", "The Workout tab shows just the current step (warm-up, cardio, each exercise, check-in) with Back and Next. Saving moves you on.")}
       ${tog("autoRest", "Start the rest timer when I check off a set", "So you don't have to remember to.")}
       ${choice("toastTime", Object.entries(L.toastTime), "Pop-up messages stay for")}
-      ${tog("calm", "Calm mode", "No confetti, no celebration sounds or buzzing. Timers still beep.")}</section>
+      ${tog("calm", "Calm mode", "No confetti, celebration sounds, or buzzing. Timers still beep.")}</section>
     <section class="card"><h3 class="h3">Motion</h3>
       ${choice("motion", Object.entries(L.motion), "Animation")}
       <p class="small muted">Nothing in the app ever flashes more than once a second.</p></section>
@@ -1136,7 +1143,7 @@ function progCalendar() {
     <div class="between"><button class="btn small" data-act="calMonth" data-v="${prev}">‹</button><h3 class="h3">${first.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><button class="btn small" data-act="calMonth" data-v="${next}">›</button></div>
     <div class="cal">${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d => `<div class="dow" aria-hidden="true">${d[0]}</div>`).join("")}
       ${cells.map(d => { const who = ids.filter(id => byDate[d]?.has(id)); const bike = ids.filter(id => commute.has(`${id}|${d}`));
-        const said = `${S.fmtDate(d)}${d === TODAY() ? ", today" : ""}: ${who.length ? who.map(id => P(id).name).join(" and ") + " worked out" : "no workouts"}${bike.length ? ", bike commute" : ""}.`;
+        const said = `${S.fmtDate(d)}${d === TODAY() ? ", today" : ""}: ${who.length ? listText(who.map(id => P(id).name)) + " worked out" : "no workouts"}${bike.length ? ", bike commute" : ""}.`;
         return `<div class="d ${d.slice(0, 7) !== m ? "out" : ""} ${d === TODAY() ? "today" : ""}"><span aria-hidden="true">${+d.slice(8)}</span><span class="visually-hidden">${esc(said)}</span><div class="dots" aria-hidden="true">${who.map(id => `<i style="background:${esc(P(id).color)}" data-i="${esc((P(id).name || "?")[0].toUpperCase())}"></i>`).join("")}${bike.length ? `<i class="bike">🚲</i>` : ""}</div></div>`; }).join("")}</div>
     <div class="row small" aria-hidden="true">${ids.map(id => `<span><i class="cal-key" style="background:${esc(P(id).color)}" data-i="${esc((P(id).name || "?")[0].toUpperCase())}"></i> ${esc(P(id).name)}</span>`).join("")}</div>
   </section>
@@ -1920,11 +1927,11 @@ function crewSettings() {
       ${a.members.map(m => `<div class="list-item"><div>${m.profileId ? avatarHtml(m.profileId) : ""}<b>${esc(m.name || "Member")}</b>${m.role === "owner" ? ` <span class="tag orig">Owner</span>` : ""}<div class="small muted">${esc(m.email)}${m.profileId ? ` · profile: ${esc(P(m.profileId).name)}` : " · no profile picked yet"}</div></div>
         ${owner && m.uid !== a.user.uid ? `<button class="btn small danger" data-act="crewRemove" data-v="${esc(m.uid)}">${state.confirmDel === m.uid ? "Confirm" : "Remove"}</button>` : ""}</div>`).join("")}</div>
     ${owner ? `<details class="more" ${a.legacy ? "open" : ""}><summary>Bring over data from the first version</summary><div class="panel small">
-      <p>Copies the workouts, body entries, library, profiles and settings saved before crews existed into this crew. Run it once.</p>
+      <p>Copies the workouts, body entries, library, profiles, and settings saved before crews existed into this crew. Run it once.</p>
       ${a.legacy ? `<p><b>${a.legacy.count}</b> items found.</p><button class="btn primary" data-act="legacyCopy">Copy ${a.legacy.count} item${a.legacy.count === 1 ? "" : "s"} into this crew</button>` : `<button class="btn" data-act="legacyCheck">Look for old data</button>`}</div></details>` : ""}
   </section>
   <section class="card"><h3 class="h3">Account</h3>
-    <p class="small">Signed in as <b>${esc(a.user.email)}</b> with ${a.user.providers.map(p => p === "google.com" ? "Google" : p === "password" ? "email + password" : p).join(" and ")}.</p>
+    <p class="small">Signed in as <b>${esc(a.user.email)}</b> with ${listText(a.user.providers.map(p => p === "google.com" ? "Google" : p === "password" ? "email + password" : p))}.</p>
     ${a.user.providers.includes("google.com") ? "" : `<button class="btn small" data-act="linkGoogle">Also sign in with Google</button>`}
     ${a.user.providers.includes("password") ? `<button class="btn small" data-act="authResetMe">Change password (sends an email)</button>` : `<div class="row" style="align-items:end"><label class="field" style="flex:1">Add a password<input type="password" id="link-pw" minlength="6" autocomplete="new-password"></label><button class="btn small" data-act="linkPassword">Add</button></div><p class="small muted">Then you can sign in with ${esc(a.user.email)} and this password if Google sign-in gives you trouble.</p>`}
     <button class="btn small danger" data-act="authSignOut">Sign out</button>

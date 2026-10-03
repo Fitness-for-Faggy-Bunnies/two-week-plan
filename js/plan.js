@@ -7,7 +7,7 @@ export const PROFILES = {
     id: "mat",
     name: "Mat",
     focus: ["glutes", "chest", "back", "core"],
-    focusNote: "Fat loss, lifted glutes, chest shape, a stronger back and core.",
+    focusNote: "Fat loss, lifted glutes, chest shape, and a stronger back and core.",
     defaultVariant: "std",
     pain: ["foot", "knees", "shoulders", "lowerBack"],
     commute: { enabled: true, miles: 12.4 },
@@ -22,7 +22,7 @@ export const PROFILES = {
     id: "benny",
     name: "Benny",
     focus: ["core", "full", "cardio"],
-    focusNote: "Midsection fat loss, long-term functional strength and bone density, low resting heart rate and higher VO2 max.",
+    focusNote: "Midsection fat loss, long-term functional strength and bone density, a low resting heart rate, and a higher VO2 max.",
     defaultVariant: "hard",
     pain: ["foot", "knees", "shoulders", "lowerBack"],
     commute: { enabled: false, miles: 0 },
@@ -58,11 +58,11 @@ export const STRETCH = {
   hamstring:{n:"Hamstring on a Bench",t:"20 sec per side",h:"Heel on a low bench, that leg straight. Stand tall and lean forward only from the hips until the back of the thigh stretches.",f:"Back of the thigh, between the knee and your sit bone. Not behind the knee itself.",g:"Restores hamstring length after deadlifts and leg curls, which takes strain off the lower back.",sec:20},
   fig4:{n:"Seated Figure-4",t:"20–30 sec per side",h:"Sit on a bench, cross one ankle over the other knee, sit tall, and lean forward a little. Stretches the glutes and hips.",f:"Deep in the glute and outer hip of the crossed leg.",g:"Releases the glutes and outer hip after thrusts and abductor work, so your hips move freely and your lower back doesn't take over.",sec:30},
   hipflex:{n:"Standing Hip Flexor",t:"20 sec per side",h:"Stand in a staggered stance. Squeeze the back leg's glute and tuck your hips under until the front of that hip stretches. No kneeling.",f:"Front of the hip and top of the thigh, on the back leg.",g:"Opens the hip flexors, which tighten from sitting and biking. Looser hip flexors let your glutes squeeze fully and ease the pull on your lower back.",sec:20},
-  adductor:{n:"Wide-Stance Side Lean",t:"20 sec per side",h:"Feet wide, shift your weight over one leg with that knee softly bent and tracking over your toes. The straight leg's inner thigh stretches.",f:"Inner thigh of the straight leg.",g:"Loosens the inner thighs after squats, lunges and the adductor machine, and helps your knees track straight.",sec:20},
+  adductor:{n:"Wide-Stance Side Lean",t:"20 sec per side",h:"Feet wide, shift your weight over one leg with that knee softly bent and tracking over your toes. The straight leg's inner thigh stretches.",f:"Inner thigh of the straight leg.",g:"Loosens the inner thighs after squats, lunges, and the adductor machine, and helps your knees track straight.",sec:20},
   calf:{n:"Gentle Calf Stretch",t:"20 sec per side",h:"Hands on a wall or machine, one foot back with the heel down. Go easy on an injured foot and stop if the heel or arch tightens.",f:"The calf muscle at the back of the lower leg, on the back leg. Not in the heel or the arch.",g:"Keeps the calf and Achilles flexible, which takes pressure off the foot and helps a healing tendon.",sec:20},
   ankle:{n:"Ankle Circles",t:"10 each way, each foot",h:"Sit on a bench and slowly circle each foot. Good care for a healing foot.",f:"Easy movement around the ankle. No stretch feeling.",g:"Keeps the ankle moving smoothly and brings blood flow to the foot without loading it.",sec:0},
   twist:{n:"Seated Twist",t:"20 sec per side",h:"Sit tall on a bench and turn your chest to one side, one hand on the bench behind you.",f:"Along the sides of your waist and through the middle and upper back.",g:"Restores rotation in the spine after core work and lets the obliques relax.",sec:20},
-  backarch:{n:"Standing Back Extension",t:"5 slow reps",h:"Hands on your hips, squeeze your glutes, and gently lean back a small amount. Return to tall.",f:"A gentle stretch across the front of the hips and stomach. Your lower back should feel relief, never a pinch.",g:"Undoes the bent-forward position of rows, deadlifts and sitting, and resets your posture.",sec:0}
+  backarch:{n:"Standing Back Extension",t:"5 slow reps",h:"Hands on your hips, squeeze your glutes, and gently lean back a small amount. Return to tall.",f:"A gentle stretch across the front of the hips and stomach. Your lower back should feel relief, never a pinch.",g:"Undoes the bent-forward position of rows, deadlifts, and sitting, and resets your posture.",sec:0}
 };
 
 export const LUNGES = [
@@ -87,7 +87,7 @@ const SWAPS = {
   "a-mon-push": W("Machine Tricep Extension","load","Elbows on the pad, push the handles down until your arms are straight, return slowly.",{q:"tricep extension machine"}),
   "a-mon-fly": W("Cable Crossover","load","Handles at shoulder height, step forward, bring your hands together in front of your chest with a slight elbow bend.",{q:"cable crossover chest fly"}),
   "a-tue-pd": W("Single-Arm Cable Pulldown","load","Kneel or sit under a high pulley with one handle. Pull your elbow down to your side, one arm at a time."),
-  "a-tue-row": W("Seated Cable Row","load","Sit tall, feet on the platform, pull the handle to your belly and squeeze your shoulder blades.",{q:"seated cable row"}),
+  "a-tue-row": W("Seated Cable Row","load","Sit tall with your feet on the platform, pull the handle to your belly, and squeeze your shoulder blades.",{q:"seated cable row"}),
   "a-tue-pu": W("Close-Grip Lat Pulldown","load","V-handle on the pulldown. Pull to your upper chest with elbows close to your body.",{q:"close grip lat pulldown"}),
   "a-tue-bext": W("Lower Back Machine","load","Seated back extension machine. Lean back against the pad slowly and return with control. Keep it light.",{q:"back extension machine seated"}),
   "a-tue-rdelt": W("Cable Face Pull","load","Rope at the top pulley. Pull toward your forehead, elbows high, hands spreading apart."),
@@ -110,7 +110,7 @@ const SWAPS = {
   "b-mon-sp": W("Machine Shoulder Press","load","Seat so handles start at shoulder level, back on the pad, press up without shrugging."),
   "b-mon-clat": W("Dumbbell Lateral Raise","load","Stand tall, slight elbow bend, raise to shoulder height and lower slowly.",{db:true}),
   "b-mon-dip": W("Cable Tricep Pushdown","load","Rope or bar at the top pulley. Elbows pinned, push down to straight arms, return slowly."),
-  "b-mon-ohext": W("Overhead Dumbbell Tricep Extension","load","Seated, hold one dumbbell with both hands overhead, lower behind your head and press back up.",{q:"seated overhead dumbbell tricep extension"}),
+  "b-mon-ohext": W("Overhead Dumbbell Tricep Extension","load","Seated, hold one dumbbell with both hands overhead, lower it behind your head, and press back up.",{q:"seated overhead dumbbell tricep extension"}),
   "b-tue-cgpd": W("Assisted Pull-Up (neutral grip)","assist","Neutral handles on the assisted machine. Pull your chest toward the handles, lower slowly.",{q:"assisted pull up machine"}),
   "b-tue-csrow": W("Seated Row Machine","load","Chest on the pad, pull the handles to your ribs, squeeze your shoulder blades."),
   "b-tue-sapd": W("Dumbbell Pullover","load","Lie across a bench holding one dumbbell over your chest with both hands. Lower it back over your head with slightly bent arms and pull it back.",{q:"dumbbell pullover"}),
@@ -145,7 +145,7 @@ export const PLAN = {
         h:H("Machine Chest Press, 4 sets","4 × 8–10","load","Same machine, heavier weight, one extra set. Last reps should be a real grind with clean form.",{q:"machine chest press"})}),
       X("a-mon-inc","Incline Chest Press","3 × 10–12","new",["chest"],"load","Upper chest. This is what gives pecs their shape at the top.","Bench at a low incline, about 30 degrees. Lower the weight to your upper chest with elbows slightly tucked, not flared straight out.",["chest","crossbody"],{q:"incline dumbbell press",db:true}),
       X("a-mon-sp","Machine Shoulder Press","3 × 8–10","orig",["shoulders"],"load","Stop one rep short of failure on the last set.","Seat height so the handles start at shoulder level. Back flat on the pad, press up without shrugging, and lower under control.",["crossbody","neck"],{q:"machine shoulder press",
-        h:H("Standing Dumbbell Overhead Press","4 × 10","load","Stand tall, brace your core and glutes, press the dumbbells overhead without leaning back. Standing makes your whole trunk work.",{q:"standing dumbbell overhead press",db:true})}),
+        h:H("Standing Dumbbell Overhead Press","4 × 10","load","Stand tall, brace your core and glutes, and press the dumbbells overhead without leaning back. Standing makes your whole trunk work.",{q:"standing dumbbell overhead press",db:true})}),
       X("a-mon-lat","Dumbbell Lateral Raise","3 × 12–15","new",["shoulders"],"load","Light weight. Widens the shoulders and makes the waist look smaller.","Stand tall with a slight bend in the elbows. Raise to shoulder height, leading with your elbows, and lower slowly.",["circles","neck"],{db:true}),
       X("a-mon-push","Cable Tricep Pushdown","3 × 10–12","new",["arms"],"load","Triceps, standing tall the whole time.","Rope or bar at the top pulley. Pin your elbows to your sides and push down until your arms are straight, then let it rise slowly.",["triceps","forearm"], {}),
       X("a-mon-fly","Pec Fly Machine","2 × 12–15","new",["chest"],"load","Finisher for the chest. Slow on the way back.","Handles at chest height, slight bend in the elbows. Bring your hands together in front of your chest like hugging a barrel.",["chest","shrug"],{q:"pec deck fly machine",
@@ -197,7 +197,7 @@ export const PLAN = {
       X("b-mon-fly","Pec Fly Machine","3 × 12–15","new",["chest"],"load","Stretch at the open position, squeeze in the middle.","Handles at chest height, slight bend in the elbows. Open until you feel a gentle chest stretch, then squeeze together.",["chest","crossbody"],{q:"pec deck fly machine",
         h:H("Decline Push-Ups","3 × 10–12","bw","Feet up on a bench, hands on the floor. Lower your chest toward the floor and press up. Hits the upper chest and shoulders.")}),
       X("b-mon-sp","Seated Dumbbell Shoulder Press","3 × 8–10","orig",["shoulders"],"load","Back against an upright bench for support.","Bench fully upright. Start with dumbbells at shoulder height, press up and slightly in, and lower under control.",["crossbody","neck"],{db:true,
-        h:H("Standing Dumbbell Overhead Press","4 × 10","load","Stand tall, brace your core and glutes, press overhead without leaning back.",{q:"standing dumbbell overhead press",db:true})}),
+        h:H("Standing Dumbbell Overhead Press","4 × 10","load","Stand tall, brace your core and glutes, and press overhead without leaning back.",{q:"standing dumbbell overhead press",db:true})}),
       X("b-mon-clat","Cable Lateral Raise","3 × 12–15","new",["shoulders"],"load","One arm at a time. Smooth all the way up and down.","Stand side-on to a low pulley and hold the handle in the far hand. Raise out to shoulder height and lower slowly.",["circles","neck"], {}),
       X("b-mon-dip","Assisted Dip Machine","3 × 8–12","new",["arms","chest"],"assist","Triceps and lower chest. Go only halfway down if your shoulders feel any pinch.","Kneel on the pad, hands on the handles, body upright. Lower until your elbows reach about 90 degrees, then press up.",["chest","triceps"],{
         h:H("Bodyweight Dips","3 × max","bw","On parallel bars or the dip handles of the captain's chair. Lower to about 90 degrees at the elbow and press up.",{q:"parallel bar dips"})}),

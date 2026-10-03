@@ -559,3 +559,15 @@ body[data-motion="reduce"] #flash-alert.pulse{animation:none!important}
 body[data-contrast="high"] .ex-toggle .chev{border-color:#fff}
 .our-machines{display:grid;gap:4px;margin:4px 0}
 .our-machines .btn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.tmr-vol-l{display:flex;align-items:center;gap:8px;flex:1}
+.tmr-vol-l input{flex:1;accent-color:var(--accent);min-height:28px}
+.tmr-warn{margin:0;color:var(--ink);background:var(--warn-soft);border-left:4px solid var(--warn);padding:6px 10px;border-radius:6px}
+.ex-num{display:inline-grid;place-items:center;min-width:1.7em;height:1.7em;padding:0 .35em;border-radius:999px;background:var(--accent);color:var(--on-accent);font:800 .85rem var(--mono);flex:none}
+.ex-num.done{background:var(--accent-soft);color:var(--ink);margin-right:6px}
+.done-card .head .name{display:flex;align-items:center;gap:6px}
+details.more.sub summary{font-size:.85rem}
+.ex-toggle{flex-wrap:nowrap;align-items:flex-start}
+.ex-toggle .chev{margin-top:.45em}
+.ex-toggle .ex-num{margin-top:.05em}
+.ex-title{flex:1;min-width:0}
+.ex-title .tag{margin-left:6px}

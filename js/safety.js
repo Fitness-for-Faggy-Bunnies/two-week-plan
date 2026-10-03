@@ -150,7 +150,7 @@ const EXTRA = {
     ["neck", "Neck strain", "Arms crossed on your chest; don't pull your head."]),
   "jump squats": R({ knees: 2, ankles: 2, hips: 1 },
     ["knees", "Knee pain from hard landings", "Land quietly with bent knees."],
-    ["ankles", "Foot or ankle injury", "Skip with any foot, ankle or knee injury."]),
+    ["ankles", "Foot or ankle injury", "Skip with any foot, ankle, or knee injury."]),
   "jump rope": R({ ankles: 2, knees: 1 },
     ["ankles", "Achilles or shin irritation", "Small hops on the balls of your feet; skip with foot injuries."]),
   "negative pull ups": R({ shoulders: 2, elbows: 2 },

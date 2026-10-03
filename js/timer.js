@@ -19,15 +19,25 @@ export function setVol(v) {
 }
 const volIcon = v => (v === 0 ? "🔇" : v < 0.4 ? "🔈" : v < 0.75 ? "🔉" : "🔊");
 
+// iPhone: ask for "transient" audio (short alert-style sounds that duck music) so beeps aren't treated
+// as background page audio. Supported on iOS 16.4+; ignored elsewhere.
+try { if (navigator.audioSession && navigator.audioSession.type !== "transient") navigator.audioSession.type = "transient"; } catch { /* not supported */ }
+
 function audioOn() {
   try {
     ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-    ctx.resume?.();
+    if (ctx.state !== "running") ctx.resume?.().catch(() => {});
     if (!master) { master = ctx.createGain(); master.connect(ctx.destination); }
     master.gain.value = getVol();
   } catch { ctx = null; }
   return ctx;
 }
+// Called inside a tap: wake the audio up and play one silent sample, which is what iPhones need to allow sound later.
+function unlockAudio() {
+  if (!audioOn()) return;
+  try { const b = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource(); src.buffer = b; src.connect(ctx.destination); src.start(0); } catch { /* ignore */ }
+}
+export const audioBlocked = () => !ctx || ctx.state !== "running";
 function beep(at, freq, len, list = scheduled) {
   if (!ctx || !master) return;
   const o = ctx.createOscillator(), g = ctx.createGain();
@@ -37,23 +47,23 @@ function beep(at, freq, len, list = scheduled) {
   o.start(at); o.stop(at + len + 0.02);
   list.push(o);
 }
+// Beeps play when they're due (driven by the timer's own clock), not pre-scheduled when you tap Start.
+// If the phone suspended the audio in between, it's resumed first, and the beep waits for it.
+function play(kind) {
+  if (!audioOn()) return;
+  const go = () => {
+    const t = ctx.currentTime + 0.02;
+    if (kind === "count") beep(t, 660, 0.15);
+    else if (kind === "go") beep(t, 1320, 0.4);
+    else if (kind === "end") for (let i = 0; i < 5; i++) beep(t + i * 0.3, 990, 0.18, endBeeps);
+    else if (kind === "test") beep(t, 990, 0.2);
+  };
+  if (ctx.state === "running") go();
+  else ctx.resume?.().then(go).catch(() => {});
+}
 const stopAllIn = list => list.forEach(o => { try { o.stop(); } catch { /* already stopped */ } });
 function cancelSound() { stopAllIn(scheduled); stopAllIn(endBeeps); scheduled = []; endBeeps = []; }
-function scheduleEnd(secondsFromNow) {
-  stopAllIn(endBeeps); endBeeps = [];
-  if (!audioOn()) return;
-  const end = ctx.currentTime + secondsFromNow;
-  for (let i = 0; i < 5; i++) beep(end + i * 0.3, 990, 0.18, endBeeps);
-}
-
-// Low beeps on 3, 2, 1, a higher, longer beep on GO, then 5 beeps when time is up.
-function scheduleRun(seconds) {
-  if (!audioOn()) return;
-  const t0 = ctx.currentTime + 0.05;
-  [0, 1, 2].forEach(i => beep(t0 + i, 660, 0.15));
-  beep(t0 + 3, 1320, 0.4);
-  scheduleEnd(0.05 + 3 + seconds);
-}
+export function testSound() { unlockAudio(); play("test"); setTimeout(paintAudioWarn, 400); }
 
 const lockScreen = () => navigator.wakeLock?.request("screen").then(w => { wake = w; }).catch(() => {});
 const unlockScreen = () => { wake?.release?.().catch(() => {}); wake = null; };
@@ -70,9 +80,10 @@ export function start(key, seconds, label = labelFor(key)) {
   stopAll();
   const now = Date.now();
   active = { key, label, total: seconds, phase: "count", runAt: now + 3000, endAt: now + 3000 + seconds * 1000, left: seconds, said: {} };
-  scheduleRun(seconds);
+  unlockAudio();
   lockScreen();
-  clearInterval(tick); tick = setInterval(step, 100);
+  setTimeout(paintAudioWarn, 500);
+  clearInterval(tick); tick = setInterval(step, 50); step();
   paint();
 }
 // Pausing during the countdown cancels it. Resuming runs the countdown again, then picks up where it left off.
@@ -99,7 +110,6 @@ export function adjust(key, delta) {
   active.endAt = Math.max(now, active.runAt) + left * 1000;
   active.total = Math.max(active.total + Math.max(0, delta), left);
   if (active.phase === "run") active.left = left;
-  scheduleEnd((active.endAt - now) / 1000);
   paint(); return true;
 }
 
@@ -109,8 +119,8 @@ function step() {
   const said = active.said;
   if (active.phase === "count") {
     const n = Math.ceil((active.runAt - now) / 1000);
-    if (n >= 1 && n <= 3 && !said[`c${n}`]) { said[`c${n}`] = 1; emit("count", { n }); }
-    if (now >= active.runAt) { active.phase = "run"; if (!said.go) { said.go = 1; emit("go"); } }
+    if (n >= 1 && n <= 3 && !said[`c${n}`]) { said[`c${n}`] = 1; play("count"); emit("count", { n }); }
+    if (now >= active.runAt) { active.phase = "run"; if (!said.go) { said.go = 1; play("go"); emit("go"); } }
   }
   if (active.phase === "run") {
     active.left = Math.max(0, (active.endAt - now) / 1000);
@@ -120,7 +130,7 @@ function step() {
       active.phase = "done"; clearInterval(tick); unlockScreen();
       const key = active.key;
       setTimeout(() => { if (!active || active.phase === "done") { scheduled = []; endBeeps = []; } }, 2000);
-      paint(); emit("done");
+      play("end"); paint(); emit("done");
       document.dispatchEvent(new CustomEvent("twp-timer-done", { detail: { key } }));
       return;
     }
@@ -150,6 +160,14 @@ const paint = () => { if (active) paintKey(active.key, active); };
 
 // The timer as HTML. Safe to re-render at any time: it always reflects the running timer for its key.
 // from: optional selector (inside the same [data-ex] card) of an input holding the seconds, e.g. a set's seconds box.
+// Shows the "no sound" note on any timer on screen while the phone is blocking audio.
+function paintAudioWarn() {
+  const blocked = audioBlocked() || getVol() === 0;
+  document.querySelectorAll(".tmr-warn").forEach(el => {
+    el.hidden = !blocked;
+    el.textContent = getVol() === 0 ? "Timer volume is all the way down." : "No sound is getting through. Turn off Silent mode (Control Center bell, or the Action button), turn the volume up, then tap Test sound.";
+  });
+}
 export function html(key, seconds, label = "", from = "") {
   const t = state(key); const v = view(t, seconds); const vol = getVol();
   const al = label ? `: ${esc(label)}` : "";
@@ -161,8 +179,9 @@ export function html(key, seconds, label = "", from = "") {
       <button type="button" class="btn small" data-act="tReset" aria-label="Reset timer${al}" ${t ? "" : "hidden"}>Reset</button>
     </div>
     <div class="tmr-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, v.pct))}%"></i></div>
-    <label class="tmr-vol"><span class="tmr-vol-icon" aria-hidden="true">${volIcon(vol)}</span><span class="visually-hidden">Timer volume</span>
-      <input type="range" min="0" max="1" step="0.05" value="${vol}" data-tvol></label>
+    <div class="tmr-vol"><label class="tmr-vol-l"><span class="tmr-vol-icon" aria-hidden="true">${volIcon(vol)}</span><span class="visually-hidden">Timer volume</span>
+      <input type="range" min="0" max="1" step="0.05" value="${vol}" data-tvol></label><button type="button" class="btn small" data-act="tTest">Test sound</button></div>
+    <p class="tmr-warn small" role="status" hidden>No sound is getting through. Turn off Silent mode (Control Center bell, or the Action button), turn the volume up, then tap Test sound.</p>
   </div>`;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -179,6 +198,7 @@ document.addEventListener("click", e => {
     if (wasCounting) document.dispatchEvent(new CustomEvent("twp-timer", { detail: { key, what: "stopped" } }));
   }
   if (b.dataset.act === "tReset") stop(key, true);
+  if (b.dataset.act === "tTest") testSound();
 }, true);
 // Read the seconds from the linked input (if any), so editing a set's seconds changes its timer right away.
 export const syncCard = card => card?.querySelectorAll(".tmr[data-tfrom]").forEach(syncSeconds);
@@ -192,9 +212,10 @@ document.addEventListener("input", e => {
   if (card && e.target.matches("input[data-f]")) card.querySelectorAll(".tmr[data-tfrom]").forEach(syncSeconds);
   if (!e.target.matches?.("[data-tvol]")) return;
   setVol(e.target.value);
-  if (!active || active.phase === "done" || active.phase === "paused") { audioOn(); if (ctx) beep(ctx.currentTime + 0.02, 990, 0.08); }
+  if (!active || active.phase === "done" || active.phase === "paused") { unlockAudio(); play("test"); }
+  paintAudioWarn();
 });
 document.addEventListener("change", e => { if (e.target.matches?.("[data-tvol]")) e.stopPropagation(); }, true);
 
 // Bring the screen lock back when the app returns to the front mid-timer.
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && active && (active.phase === "count" || active.phase === "run")) { lockScreen(); ctx?.resume?.(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && active && (active.phase === "count" || active.phase === "run")) { lockScreen(); ctx?.resume?.().catch(() => {}); } });

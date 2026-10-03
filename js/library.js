@@ -198,7 +198,7 @@ export const BUILTIN = [
     "Lie on your back, knees bent, dumbbell on your hips. Lift your hips, squeeze, and lower slowly.",
     [["lowerBack", "Low back arching", "Squeeze your glutes and keep your ribs down."]], { db: false }),
   L("db-sl-hip-thrust", "Single-Leg Hip Thrust", ["glutes"], "hinge", [2, 2, 0], "lying", { lowerBack: 1, hips: 1 }, "3 × 10 per leg",
-    "Upper back on a bench, one foot on the floor and the other knee pulled in. Drive up through the planted heel. Add a dumbbell on the working hip when it gets easy.",
+    "Upper back on a bench, one foot on the floor, and the other knee pulled in. Drive up through the planted heel. Add a dumbbell on the working hip when it gets easy.",
     [["lowerBack", "Low back arching", "Ribs down, and squeeze the glute to finish."]], { uni: true, db: false }),
   L("db-calf-raise", "Dumbbell Calf Raise", ["calves"], "isolation", [1, 1, 0], "standing", { ankles: 2 }, "3 × 12–15",
     "Balls of your feet on a step, dumbbells at your sides. Rise up, pause, and lower your heels slowly.",

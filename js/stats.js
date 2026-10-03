@@ -165,7 +165,7 @@ export const BODY_FIELDS = {
 // Lower is the goal for these.
 export const LOWER_IS_BETTER = new Set(["weight", "waist", "restingHr"]);
 export const HIGHER_IS_BETTER = new Set(["vo2", "fit"]);
-// Hips, chest, thigh and arm can move either way for good reasons (fat loss vs. muscle), so they get no color.
+// Hips, chest, thigh, and arm can move either way for good reasons (fat loss vs. muscle), so they get no color.
 export function trendClass(f, change) {
   if (!change) return "";
   if (LOWER_IS_BETTER.has(f)) return change < 0 ? "good" : "bad";
