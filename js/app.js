@@ -11,7 +11,7 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "17";
+const APP_VERSION = "18";
 const $ = (s, r = document) => r.querySelector(s);
 // "a", "a and b", "a, b, and c" (Oxford comma)
 const listText = (xs, word = "and") => xs.length < 3 ? xs.join(` ${word} `) : `${xs.slice(0, -1).join(", ")}, ${word} ${xs[xs.length - 1]}`;
@@ -138,8 +138,13 @@ const BASE_DATE = () => state.logDate || TODAY();
 // cycle, that day's date; otherwise the logging date. Keeps each week's workouts separate.
 const LD = () => (state.sel ? sessionFor(LU(), BASE_DATE())?.date : null) || BASE_DATE();
 
+// Open on the first plan day in this cycle that isn't done yet (A Mon → B Thu), whatever today's date is.
+// Only when all eight are done does it fall back to the calendar.
 function autoSel() {
-  const t = TODAY(); const dow = new Date().getDay();
+  const t = TODAY(); const cyc = S.cycleInfo(t, cycleStart()); const u = LU();
+  const done = new Set(state.data.sessions.filter(x => x.user === u && x.date >= cyc.start && x.date <= cyc.end && (x.exercises || []).some(e => e.sets?.length)).map(x => `${x.week}${x.day}`));
+  for (const week of ["A", "B"]) for (const day of DAYS) if (!done.has(`${week}${day}`)) return { week, day };
+  const dow = new Date().getDay();
   if (dow >= 1 && dow <= 4) return { week: S.cycleInfo(t, cycleStart()).week, day: DAYS[dow - 1] };
   const nextMon = S.addDays(t, dow === 0 ? 1 : 8 - dow);
   return { week: S.cycleInfo(nextMon, cycleStart()).week, day: "Mon" };
@@ -174,6 +179,29 @@ function normalizeSession(s) {
   const legacy = (s.exercises || []).filter(e => !map[e.id]);
   const all = [...legacy, ...Object.values(map)].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
   return { ...s, exercises: all };
+}
+
+// Which plan day a workout really is, judged by the exercises in it (plan ids start with the day, like "a-mon-").
+// The date doesn't matter: Week A Monday done on a Friday is still Week A Monday. Earlier versions labeled a
+// workout with whatever day was on screen when it was first saved; this puts those under the right day.
+const SLOT_RE = /^([ab])-(mon|tue|wed|thu)-/;
+function inferredSlot(s) {
+  const votes = {};
+  for (const e of s.exercises || []) { const m = SLOT_RE.exec(e.id || ""); if (m && e.sets?.length) { const k = `${m[1].toUpperCase()}|${m[2][0].toUpperCase()}${m[2].slice(1)}`; votes[k] = (votes[k] || 0) + 1; } }
+  const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+  if (!best) return null;
+  const [week, day] = best[0].split("|");
+  return { week, day };
+}
+let relabeling = false;
+function relabel() {
+  if (relabeling || state.flags.sessions?.fromCache) return;
+  relabeling = true;
+  for (const s of state.data.sessions) {
+    const r = inferredSlot(s);
+    if (r && (r.week !== s.week || r.day !== s.day)) { s.week = r.week; s.day = r.day; patch("sessions", s.id, { week: r.week, day: r.day }); }
+  }
+  relabeling = false;
 }
 
 // Tonight's first version saved a new document per save. Fold any duplicates into one per person per day.
@@ -271,9 +299,11 @@ function render() {
   $("#tabs").classList.remove("hidden"); $("#gear").classList.remove("hidden"); $("#sync").classList.remove("hidden");
   const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user) + esc(P(state.user).name) + (state.partner ? " + " + esc(P(other(state.user)).name) : "");
   document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
-  if (!state.sel) {
+  // Pick the day to open on. Until workouts have loaded (and unless you've tapped a day), keep re-picking.
+  if (!state.sel || (!state.selSettled && !state.userTouchedSel)) {
     const s = sessionFor(LU(), BASE_DATE(), null);
     state.sel = s && s.week && s.day ? { week: s.week, day: s.day } : autoSel();
+    if (state.flags.sessions && !state.flags.sessions.fromCache) state.selSettled = true;
   }
   if (!state.viewUser || !profileIds().includes(state.viewUser) || !canSee(state.viewUser)) state.viewUser = state.user;
   const banner = state.error ? `<div class="banner" role="alert">${esc(state.error)}</div>` : "";
@@ -1900,7 +1930,7 @@ function onData(name, docs, fromCache, pending) {
   state.raw[name] = docs;
   state.data[name] = name === "sessions" ? docs.map(normalizeSession) : docs; state.flags[name] = { fromCache, pending };
   if ((name === "settings" || name === "sessions") && !state.userTouchedSel) state.sel = null;
-  if (name === "sessions") consolidate();
+  if (name === "sessions") { relabel(); consolidate(); }
   if (name === "pings") handlePings();
   if (["sessions", "body", "activities"].includes(name)) checkAchievements();
   updateSync();
