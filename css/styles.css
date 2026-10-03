@@ -571,3 +571,6 @@ details.more.sub summary{font-size:.85rem}
 .ex-toggle .ex-num{margin-top:.05em}
 .ex-title{flex:1;min-width:0}
 .ex-title .tag{margin-left:6px}
+.tmr-vol{flex-wrap:wrap}
+.tmr-vol-l{min-width:140px}
+.tmr-vol-l input{min-width:100px}
