@@ -3,6 +3,7 @@ import { PROFILES as SEEDS, PLAN, STRETCH, CARDIO, DAYS, DAY_NAMES, ALL_EX, FOCU
 import * as F from "./fun.js";
 import * as T from "./timer.js";
 import * as A from "./a11y.js";
+import { icon, play } from "./icons.js";
 import { safetyFor } from "./safety.js";
 import * as S from "./stats.js";
 import { BUILTIN, GYM, EQUIP, PATTERN, JOINTS, POSITION, LEVEL, PLAN_PATTERN, PLAN_MACHINES, STRETCH_BY_FOCUS, normalizeLib } from "./library.js";
@@ -11,7 +12,9 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "18";
+const APP_VERSION = "19";
+// The app's name lives here only (plus manifest.webmanifest and the <title> tags in index.html, which can't read JS).
+const APP_NAME = "Two-Week Split";
 const $ = (s, r = document) => r.querySelector(s);
 // "a", "a and b", "a, b, and c" (Oxford comma)
 const listText = (xs, word = "and") => xs.length < 3 ? xs.join(` ${word} `) : `${xs.slice(0, -1).join(", ")}, ${word} ${xs[xs.length - 1]}`;
@@ -101,11 +104,16 @@ function editPlan(users, weeks, day, fn) {
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 let toastTimer;
+// What the app says: the theme's voice when it has one and Theme voice is on, otherwise the person's Personality.
+const voiceSkin = () => (A.get().themeVoice && F.hasThemeVoice(document.body.dataset.skin) ? document.body.dataset.skin : null);
+const sayV = (key, vars = {}, u = state.user) => F.say(P(u).voice, key, vars, voiceSkin());
+// A toast in the theme's voice, read to screen readers in plain words.
+const toastV = (key, vars = {}, u = state.user) => toast(sayV(key, vars, u), voiceSkin() ? F.plain(key, vars) : null);
 // Messages stay up as long as the person chose in Accessibility (or until tapped).
-function toast(msg) {
+function toast(msg, spoken = null) {
   let t = $(".toast");
   if (!t) { t = document.createElement("button"); t.type = "button"; t.className = "toast"; t.setAttribute("role", "status"); t.addEventListener("click", () => t.remove()); document.body.appendChild(t); }
-  t.innerHTML = `${esc(msg)}<span class="toast-x" aria-hidden="true">✕</span><span class="visually-hidden">. Tap to dismiss.</span>`;
+  t.innerHTML = spoken ? `<span aria-hidden="true">${esc(msg)}</span><span class="visually-hidden">${esc(spoken)}</span><span class="toast-x" aria-hidden="true">✕</span><span class="visually-hidden">. Tap to dismiss.</span>` : `${esc(msg)}<span class="toast-x" aria-hidden="true">✕</span><span class="visually-hidden">. Tap to dismiss.</span>`;
   const secs = A.get().toastTime;
   clearTimeout(toastTimer); if (secs) toastTimer = setTimeout(() => t.remove(), secs * 1000);
 }
@@ -279,7 +287,7 @@ function render() {
   if (!state.auth?.ready || !state.auth.user || !state.auth.crewId) {
     applyAppearance(); $("#tabs").classList.add("hidden"); $("#who").classList.add("hidden"); $("#gear").classList.add("hidden"); $("#sync").classList.add("hidden");
     main.innerHTML = !state.auth?.ready ? `<p class="muted">Loading…</p>` : !state.auth.user ? viewSignIn() : viewCrewSetup();
-    document.title = "Two-Week Split"; A.restoreFocus(main);
+    document.title = APP_NAME; A.restoreFocus(main);
     return;
   }
   if (state.user && state.flags.profiles && !profileIds().includes(state.user)) state.user = null;
@@ -297,7 +305,7 @@ function render() {
   if (profileIds().length < 2) state.partner = false;
   if (!state.partner) state.logUser = state.user;
   $("#tabs").classList.remove("hidden"); $("#gear").classList.remove("hidden"); $("#sync").classList.remove("hidden");
-  const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user) + esc(P(state.user).name) + (state.partner ? " + " + esc(P(other(state.user)).name) : "");
+  const who = $("#who"); who.classList.remove("hidden"); who.innerHTML = avatarHtml(state.user, false, true) + `<span class="who-name">${esc(P(state.user).name)}${state.partner ? " + " + esc(P(other(state.user)).name) : ""}</span>`; updateSync();
   document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   // Pick the day to open on. Until workouts have loaded (and unless you've tapped a day), keep re-picking.
   if (!state.sel || (!state.selSettled && !state.userTouchedSel)) {
@@ -310,7 +318,7 @@ function render() {
   const views = { today: viewToday, progress: viewProgress, body: viewBody, crew: viewCrew, gym: viewGym };
   main.innerHTML = banner + views[state.view]();
   afterRender();
-  document.title = `${VIEW_NAMES[state.view] || ""} · Two-Week Split`;
+  document.title = `${VIEW_NAMES[state.view] || ""} · ${APP_NAME}`;
   A.restoreFocus(main);
 }
 const VIEW_NAMES = { today: "Workout", progress: "Progress", body: "Body", crew: "Crew", gym: "Gym" };
@@ -343,15 +351,15 @@ function viewToday() {
   return `
   ${state.partner ? `<section class="card"><span class="eyebrow">Partner mode · logging for</span>${personToggle("logUser", u)}</section>` : ""}
   ${state.logDate ? `<div class="banner">Logging for ${S.fmtDate(date)}. <button class="btn small" data-act="backToToday">Back to today</button></div>` : notToday ? `<div class="banner">Week ${esc(week)} ${esc(DAY_NAMES[day])} was logged on ${S.fmtDate(date)}.</div>` : ""}
-  ${rem.length && !focusOn() ? `<section class="reminders" aria-label="Reminders">${rem.map(r => `<div class="rem"><span>${esc(r.text)}</span><span class="row"><button class="btn small" data-act="goView" data-v="${r.view}">Open</button><button class="btn small" data-act="dismissRem" data-v="${r.id}" aria-label="Remind me tomorrow">✕</button></span></div>`).join("")}</section>` : ""}
+  ${rem.length && !focusOn() ? `<section class="reminders" aria-labelledby="rem-title"><h2 class="rem-title" id="rem-title">${icon("pulse", 16, { stroke: 2 })}${rem.every(r => r.id === "weigh" || r.id === "measure") ? "Set your starting point" : "Reminders"}</h2>${rem.map(r => `<div class="rem"><p>${esc(r.text)}</p><button class="btn pill" data-act="goView" data-v="${r.view}">Open</button><button class="icon-btn round ghost" data-act="dismissRem" data-v="${r.id}" aria-label="Dismiss until tomorrow: ${esc(r.text)}">${icon("x", 18, { stroke: 2 })}</button></div>`).join("")}</section>` : ""}
   ${dl ? `<div class="banner"><b>Lighter week</b> until ${S.fmtDate(deloadOf(u).to)}: about 60% of your usual weights and one less set. <button class="btn small" data-act="endDeload">End it early</button></div>` : dlSug ? `<div class="banner">${esc(dlSug)} <button class="btn small" data-act="startDeload">Start a lighter week</button></div>` : ""}
-  <section class="card">
-    <div class="between"><span class="eyebrow">${ci.week === week && !notToday ? "This week is" : "Viewing"} Week ${week}</span>${funAt("medium") ? "" : `<span class="small muted mono">${done}/${list.length} done</span>`}</div>
-    ${seg("selWeek", week, [["A", "Week A"], ["B", "Week B"]], "Week")}
-    <div class="chips" role="group" aria-label="Day">${DAYS.map(d => `<button data-act="selDay" data-v="${d}" aria-pressed="${d === day}">${d}<small>${esc(dayTitle(u, week, d).split(",")[0])}</small></button>`).join("")}</div>
-    <div class="ring-row">${funAt("medium") ? ring(done, list.length) + `<span class="visually-hidden">${done} of ${list.length} exercises done.</span>` : ""}<div style="min-width:0;flex:1"><h2 class="h2">${DAY_NAMES[day]} · ${esc(dayTitle(u, week, day))}</h2>${funHeader(u)}</div></div>
+  <section class="today-top" aria-labelledby="today-title">
+    <div class="week-row"><span class="eyebrow">${ci.week === week && !notToday ? "This week" : "Viewing"}</span>${seg("selWeek", week, [["A", "Week A"], ["B", "Week B"]], "Week")}</div>
+    <div class="chips day-tiles" role="group" aria-label="Day">${DAYS.map(d => `<button data-act="selDay" data-v="${d}" aria-pressed="${d === day}" aria-label="${DAY_NAMES[d]}, ${esc(dayTitle(u, week, d))}"><span class="d" aria-hidden="true">${d}</span><span class="m" aria-hidden="true">${esc(dayTitle(u, week, d).split(",")[0])}</span></button>`).join("")}</div>
+    <div class="ring-row"><div class="today-title"><span class="eyebrow">Week ${week} · ${DAY_NAMES[day]}</span><h2 class="h2" id="today-title">${esc(dayTitle(u, week, day))}</h2></div>${funAt("medium") ? ring(done, list.length) : `<span class="small muted">${done} of ${list.length} done</span>`}</div>
+    ${funHeader(u)}
     ${workoutBar(u, date, s)}
-    <details class="more"><summary>${esc(p.name)}'s focus, notes, and date</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${(p.notes || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+    <details class="more row-disclosure"><summary>${esc(p.name)}'s focus, notes, and date${icon("chevron", 20, { stroke: 2 })}</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${(p.notes || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
       <label class="field">Logging date<input type="date" data-act="logDate" value="${date}"></label></div></details>
     <div class="row"><button class="btn small" data-act="planEdit" aria-pressed="${!!state.planEdit}">${state.planEdit ? "Done editing plan" : "Edit this day's plan"}</button>
       ${funAt("medium") && partner !== u ? `<button class="btn small" data-act="hi5">🙌 High-five ${esc(P(partner).name)}</button>` : ""}</div>
@@ -396,6 +404,18 @@ function focusSteps(u, date, s, list) {
     <div class="focus-nav"><button class="btn" data-act="focusGo" data-n="${i - 1}" ${i === 0 ? "disabled" : ""}>← Back</button><button class="btn primary" data-act="focusGo" data-n="${i + 1}" ${i >= steps.length - 1 ? "disabled" : ""}>Next →</button></div>
     ${i >= 2 && i < steps.length - 1 ? `<button class="btn block add-ex" data-act="openPicker">+ Add an exercise</button>` : ""}`;
 }
+// Number circle on each exercise: the number, or a check when every set is checked off / the exercise is saved.
+function exNum(idx, count, done) {
+  if (!count) return "";
+  return `<span class="ex-num ${done ? "filled" : ""}" aria-hidden="true">${done ? icon("check", 18) : idx + 1}</span><span class="visually-hidden">Exercise ${idx + 1} of ${count}${done ? ", all sets done" : ""}: </span>`;
+}
+// "3 × 10–12" drawn as big numbers, read as "3 sets of 10–12".
+function schemeHtml(target) {
+  const m = /^\s*(\d+)\s*×\s*(.+)$/.exec(target || "");
+  if (!m) return target ? `<span class="ex-scheme">${esc(target)}</span>` : "";
+  const rest = m[2].trim(); const said = /^[\d–-]+$/.test(rest) ? `${rest} reps` : rest;
+  return `<span class="ex-scheme" role="text" aria-label="${m[1]} sets of ${esc(said)}"><span class="big-num" aria-hidden="true">${m[1]}</span><span class="x" aria-hidden="true">×</span><span class="big-num" aria-hidden="true">${esc(rest.replace(/ (per leg|per side|sec|steps|total)$/, ""))}</span>${/ (per leg|per side|sec|steps|total)$/.test(rest) ? `<span class="unit" aria-hidden="true">${esc(rest.match(/ (per leg|per side|sec|steps|total)$/)[1])}</span>` : ""}</span>`;
+}
 // Collapsible tiles: the next exercise you haven't done opens by itself; tap any header to open or close it.
 // Your taps are remembered on this phone for the day. A tile with sets checked off or a timer running stays open.
 const openKey = (u, date) => `twp-open-${u}-${date}-${slotKey()}`;
@@ -419,7 +439,7 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   if (logged && !state.editing.has(ek)) {
     const def = S.defFor(ex.id, logged.variant || "std", logged);
     return `<article class="card ex done-card" id="ex-${ex.id}">
-      <div class="head"><h3 class="name"><span class="tick" aria-hidden="true">✓</span>${count ? `<span class="ex-num done" aria-hidden="true">${idx + 1}</span>` : ""}<span class="visually-hidden">Done${count ? `, exercise ${idx + 1} of ${count}` : ""}: </span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${vLabel(logged.variant)}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</h3><button class="btn small" data-act="editEx" data-ex="${ex.id}">Log</button></div>
+      <div class="head"><h3 class="name">${count ? `<span class="ex-num filled" aria-hidden="true">${icon("check", 18)}</span>` : `<span class="tick" aria-hidden="true">✓</span>`}<span class="visually-hidden">Done${count ? `, exercise ${idx + 1} of ${count}` : ""}: </span>${esc(logged.name || def.name)}${logged.variant && logged.variant !== "std" ? `<span class="tag new">${vLabel(logged.variant)}</span>` : ""}${added ? `<span class="tag orig">Added</span>` : ""}</h3><button class="btn small" data-act="editEx" data-ex="${ex.id}">Log</button></div>
       <div class="last"><b>${esc(S.setsText(logged))}</b></div>
     </article>`;
   }
@@ -441,15 +461,12 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   const tags = `${ex.custom || lib ? "" : ex.lib ? `<span class="tag orig">Library</span>` : `<span class="tag ${ex.tag}">${ex.tag === "orig" ? "Original" : "New"}</span>`}${added ? `<span class="tag orig">Added</span>` : ""}`;
   const open = isOpen(u, date, ex.id, d, cardOpts.forceOpen);
   const checked = d.sets.filter(x => x.done).length;
-  const num = count ? `<span class="ex-num" aria-hidden="true">${idx + 1}</span><span class="visually-hidden">Exercise ${idx + 1} of ${count}: </span>` : "";
-  const head = `<div class="head"><h3 class="name"><button type="button" class="ex-toggle" data-act="toggleEx" aria-expanded="${open}" aria-controls="exb-${ex.id}"><span class="chev" aria-hidden="true"></span>${num}<span class="ex-title">${esc(def.name)}${tags}</span></button></h3><span class="sr">${esc(target || "")}</span></div>`;
-  if (!open) {
-    const tmr = T.isActive(`set:${u}|${date}|${ex.id}|${d.sets.findIndex(x => !x.done)}`);
-    return `<article class="card ex collapsed" id="ex-${ex.id}" data-ex="${ex.id}">${head}
-      <div class="ex-mini small">${checked ? `<b>${checked} of ${d.sets.length} sets checked</b> · ` : ""}${tmr ? "<b>⏱ Timer running</b> · " : ""}${last ? `Last time: ${esc(S.describeSets(last.kind, last.db, last.sets))}` : "No history yet"}${sore.high.length ? ` · <span class="warn-text">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today</span>` : ""}</div>
-    </article>`;
-  }
-  return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
+  const allDone = d.sets.length > 0 && d.sets.every(x => x.done);
+  const tmr = T.isActive(`set:${u}|${date}|${ex.id}|${d.sets.findIndex(x => !x.done)}`);
+  const lastLine = `${checked ? `<b>${checked} of ${d.sets.length} sets checked</b> · ` : ""}${tmr ? "<b>Timer running</b> · " : ""}${last ? `Last time: ${esc(S.describeSets(last.kind, last.db, last.sets))}` : "No history yet"}${!open && sore.high.length ? ` · <span class="warn-text">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today</span>` : ""}`;
+  const head = `<div class="head ex-head"><h3 class="name"><button type="button" class="ex-toggle" data-act="toggleEx" aria-expanded="${open}" aria-controls="exb-${ex.id}">${exNum(idx, count, allDone)}<span class="ex-main"><span class="ex-name">${esc(def.name)}</span>${tags ? `<span class="ex-tags">${tags}</span>` : ""}</span>${schemeHtml(target)}<span class="ex-last">${lastLine}</span></button></h3></div>`;
+  if (!open) return `<article class="card ex collapsed ${allDone ? "all-done" : ""}" id="ex-${ex.id}" data-ex="${ex.id}">${head}</article>`;
+  return `<article class="card ex open ${allDone ? "all-done" : ""}" id="ex-${ex.id}" data-ex="${ex.id}">
     ${head}<div class="ex-body" id="exb-${ex.id}">
     ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today. Consider the Alternative or Library version.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(listText(sore.some.map(j => (JOINTS[j] || j).toLowerCase())))} today.</div>` : ""}
     ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") + `<p class="v-note small"><b>${esc(vLabel(v))}:</b> ${esc(VARIANT_NOTE[String(v).startsWith("lib:") ? "lib" : v] || "")}</p>` : ""}
@@ -459,7 +476,7 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
     ${ourMachines(ex, v)}
     ${ex.notes?.[u] ? `<div class="note">${esc(ex.notes[u])}</div>` : ""}
     ${smith ? `<div class="small muted">${esc(smith)}</div>` : ""}
-    <div class="last">${last ? `Last time (${S.fmtDate(last.date)}): <b>${esc(S.describeSets(last.kind, last.db, last.sets))}</b>` : "No history yet for this version."}</div>
+    ${last ? `<div class="last small muted">Last time was ${S.fmtDate(last.date)}.</div>` : ""}
     ${state.partner ? `<div class="last">${PROFILES[pu].name}: ${pLast ? `<b>${esc(S.describeSets(pLast.kind, pLast.db, pLast.sets))}</b>` : "no history yet"}</div>` : ""}
     ${sug ? `<div class="pill ${sug.type}">${esc(sug.text)}</div>` : ""}
     ${d.fresh ? `<div class="pill hold fresh-note">First time: set the weight and reps you actually did.</div>` : ""}
@@ -509,15 +526,17 @@ function setRow(e, s, si) {
   const u = S.unitLabel(e.kind, e.db);
   const rStep = e.kind === "time" || e.kind === "carry" ? 5 : 1;
   return `<div class="set ${u.w ? "" : "noweight"} ${s.done ? "is-done" : ""}" data-s="${si}">
-    <button type="button" class="n setcheck" role="checkbox" aria-checked="${!!s.done}" data-act="setDone" aria-label="Set ${si + 1} done">${s.done ? "✓" : si + 1}</button>
+    <span class="set-n big-num" aria-hidden="true">${si + 1}</span>
     ${u.w ? stepper("w", s.w, u.w, 1, `Set ${si + 1} weight`) : ""}
     ${stepper("r", s.r, u.r, rStep, `Set ${si + 1} ${u.r === "sec" ? "seconds" : u.r}`)}
-    <div class="diff" role="group" aria-label="How set ${si + 1} felt">${[1, 2, 3].map(d => `<button type="button" data-act="diff" data-d="${d}" aria-pressed="${(s.d || 2) === d}">${DIFF[d]}</button>`).join("")}<button type="button" class="del" data-act="delSet" aria-label="Remove set ${si + 1}">×</button></div>
+    <button type="button" class="set-del icon-btn round ghost" data-act="delSet" aria-label="Remove set ${si + 1}">${icon("x", 18, { stroke: 2 })}</button>
+    <div class="diff" role="group" aria-label="How set ${si + 1} felt">${[1, 2, 3].map(d => `<button type="button" data-act="diff" data-d="${d}" aria-pressed="${(s.d || 2) === d}">${DIFF[d]}</button>`).join("")}</div>
+    <button type="button" class="setcheck" role="checkbox" aria-checked="${!!s.done}" data-act="setDone" aria-label="Set ${si + 1} done">${s.done ? icon("check", 22) : ""}</button>
   </div>`;
 }
 function stepper(f, val, label, step, name = label) {
   const unit = label === "lb each" ? "pounds each" : label === "lb" ? "pounds" : label === "lb assist" ? "pounds of assist" : label === "sec" ? "seconds" : label;
-  return `<div><div class="stepper"><button type="button" data-act="step" data-f="${f}" data-by="${-step}" aria-label="${esc(name)} down">−</button><input type="number" inputmode="decimal" step="any" data-f="${f}" value="${esc(val)}" aria-label="${esc(name)}, ${esc(unit)}"><button type="button" data-act="step" data-f="${f}" data-by="${step}" aria-label="${esc(name)} up">+</button></div><div class="stepper-label" aria-hidden="true">${esc(label)}</div></div>`;
+  return `<div class="sw sw-${f}"><div class="stepper"><button type="button" data-act="step" data-f="${f}" data-by="${-step}" aria-label="${esc(name)} down">−</button><input type="number" inputmode="decimal" step="any" data-f="${f}" value="${esc(val)}" aria-label="${esc(name)}, ${esc(unit)}"><button type="button" data-act="step" data-f="${f}" data-by="${step}" aria-label="${esc(name)} up">+</button></div><div class="stepper-label" aria-hidden="true">${esc(label)}</div></div>`;
 }
 
 // Cardio: its own save.
@@ -825,7 +844,8 @@ function saveAddPlan() {
 
 // ---------------------------------------------------------------- appearance
 const THEMES = {
-  bunny: { name: "Bunny", desc: "Our logo colors: charcoal and hot pink.", sw: ["#2d2b2b", "#fb40ad", "#f5f0f2"] },
+  bunny: { name: "Bunny", desc: "Charcoal and hot pink, with a playful streak.", sw: ["#211f1f", "#fb40ad", "#f7f1f3"], voice: true },
+  lanai: { name: "The Lanai", desc: "Miami, 1985. Wicker, peach, seafoam and cheesecake.", sw: ["#fbf1e4", "#1f6f66", "#a33f33"], voice: true },
   floor: { name: "Gym Floor", desc: "The original. Follows light/dark.", sw: ["#eceee9", "#2f6b5e", "#b5532f"] },
   synthwave: { name: "Synthwave", desc: "Neon night drive.", sw: ["#1b0633", "#ff3fd8", "#3ff6ff"] },
   iron: { name: "Iron & Chalk", desc: "Rubber floor, plate colors.", sw: ["#18191b", "#d9412f", "#e3b23c"] },
@@ -850,9 +870,9 @@ function applyAppearance() {
   b.dataset.tone = (0.299 * r + 0.587 * g + 0.114 * bl) > 140 ? "light" : "dark";
   document.querySelector("meta[name=theme-color]")?.setAttribute("content", bg.startsWith("#") ? bg : "#12181a");
 }
-function avatarHtml(id, big) {
+function avatarHtml(id, big, dot) {
   const p = P(id);
-  return `<span class="av ${big ? "big" : ""}" style="--c:${esc(p.color)}" aria-hidden="true">${esc(p.avatar || (p.name || "?")[0].toUpperCase())}</span>`;
+  return `<span class="av ${big ? "big" : ""}" data-p="${esc(id)}" style="--c:${esc(p.color)}" aria-hidden="true">${esc(p.avatar || (p.name || "?")[0].toUpperCase())}${dot ? `<i class="online"></i>` : ""}</span>`;
 }
 function saveProfile(id, fields) {
   const exists = state.data.profiles.some(p => p.id === id);
@@ -860,10 +880,13 @@ function saveProfile(id, fields) {
   patch("profiles", id, { ...base, ...fields });
   profMemo = { src: null, map: {} };
 }
-function celebrate(kind, text) {
+function celebrate(kind, text, spoken = null) {
   const p = P(state.user);
-  if (text) toast(text);
-  const colors = [cssVar("--accent"), cssVar("--plate"), cssVar("--good"), cssVar("--warn")].filter(Boolean);
+  if (text) toast(text, spoken);
+  const skin = document.body.dataset.skin;
+  const colors = skin === "lanai" ? ["#f4b393", "#9fd3c7", "#a33f33", "#1f6f66"]
+    : skin === "bunny" ? ["#fb40ad", "#f7f1f3", "#8ad1c2", "#b7a6ff"]
+    : [cssVar("--accent"), cssVar("--plate"), cssVar("--good"), cssVar("--warn")].filter(Boolean);
   if (A.get().calm) return;
   if (kind === "pr" || kind === "badge" || kind === "level" || (kind === "finish" && funAt("medium"))) { if (!A.reduceMotion()) F.confetti(colors); if (p.sound) F.fanfare(); A.buzz([60, 40, 120]); }
   else if (p.sound && kind !== "quiet") F.chime();
@@ -920,7 +943,7 @@ let elapsedTick;
 function workoutBar(u, date, s) {
   clearInterval(elapsedTick);
   if (date !== TODAY() && !s?.startedAt) return "";
-  if (!s?.startedAt) return `<button class="btn primary block" data-act="startWorkout">Start workout</button>`;
+  if (!s?.startedAt) return `<button class="btn primary block start-btn" data-act="startWorkout">${play(18)}Start workout</button>`;
   if (!s.finishedAt) {
     elapsedTick = setInterval(() => { const el = $("#elapsed"); if (el) el.textContent = fmtDur(Date.now() - s.startedAt); else clearInterval(elapsedTick); }, 1000);
     return `<div class="timerbar"><span>Workout time <b class="mono" id="elapsed">${fmtDur(Date.now() - s.startedAt)}</b></span><button class="btn small primary" data-act="finishWorkout">Finish workout</button></div>`;
@@ -942,7 +965,7 @@ function openSummary(u, date) {
   const fw = F.funWeight(r.vol);
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Workout summary"><div class="inner">
     <div class="between"><span class="eyebrow">${esc(P(u).name)} · ${S.fmtDate(date)}</span><button class="btn small" data-act="closeOverlay">Close</button></div>
-    <div class="finish-hero">${avatarHtml(u, true)}<h2 class="h2">${esc(F.say(P(state.user).voice, "finish"))}</h2>
+    <div class="finish-hero">${avatarHtml(u, true)}<h2 class="h2">${esc(sayV("finish"))}</h2>
       ${r.dur ? `<div class="big mono">${fmtDur(r.dur)}</div><div class="muted small">workout time</div>` : ""}</div>
     <div class="stats">
       <div class="stat"><div class="v">${r.ex.length}</div><div class="l">Exercises</div></div>
@@ -999,10 +1022,10 @@ function checkAchievements() {
     const got = F.earnedBadges(state.data.sessions, state.data.body, state.data.activities, u, TODAY());
     const key = `twp-badges-${u}`; const seen = store.get(key, null);
     store.set(key, [...got]);
-    if (seen) for (const b of F.BADGES) if (got.has(b.id) && !seen.includes(b.id)) { celebrate("badge", `${b.icon} ${F.say(P(u).voice, "badge", { name: b.name })}`); break; }
+    if (seen) for (const b of F.BADGES) if (got.has(b.id) && !seen.includes(b.id)) { celebrate("badge", `${b.icon} ${sayV("badge", { name: b.name }, u)}`, F.plain("badge", { name: b.name })); break; }
     if (funAt("full")) {
       const lvl = F.level(F.points(state.data.sessions, state.data.activities, u)).i; const lk = `twp-level-${u}`; const prev = store.get(lk, null);
-      store.set(lk, lvl); if (prev != null && lvl > prev) celebrate("level", F.say(P(u).voice, "level", { name: F.LEVELS[lvl] }));
+      store.set(lk, lvl); if (prev != null && lvl > prev) celebrate("level", sayV("level", { name: F.LEVELS[lvl] }, u), F.plain("level", { name: F.LEVELS[lvl] }));
     }
   }, 600);
 }
@@ -1014,7 +1037,7 @@ function handlePings() {
   store.set(key, Math.max(p.at, seen));
   if (p.at > seen && funAt("medium")) {
     const el = document.createElement("div"); el.className = "hi5-burst"; el.textContent = "🙌"; document.body.appendChild(el); setTimeout(() => el.remove(), 1400);
-    toast(F.say(P(u).voice, "hi5got", { name: P(p.from)?.name || "Your partner" })); if (P(u).sound) F.chime(); navigator.vibrate?.([80, 60, 80]);
+    toastV("hi5got", { name: P(p.from)?.name || "Your partner" }, u); if (P(u).sound) F.chime(); navigator.vibrate?.([80, 60, 80]);
   }
 }
 function funHeader(u) {
@@ -1022,18 +1045,19 @@ function funHeader(u) {
   const parts = [];
   if (funAt("medium")) {
     const st = F.streaks(state.data.sessions, u, TODAY());
-    parts.push(`<span class="small">🔥 <b>${st.current}</b>-week streak · <b>${st.thisWeek}</b> of ${st.need}+ workouts this week</span>`);
+    parts.push(`<div class="stat-tile"><div class="st-top">${icon("flame", 18, { stroke: 2 })}<span class="big-num">${st.current}</span><span class="st-unit">week${st.current === 1 ? "" : "s"}</span></div><div class="st-sub">streak · ${st.thisWeek} of ${st.need}+ this week</div></div>`);
   }
   if (funAt("full")) {
     const all = F.points(state.data.sessions, state.data.activities, u); const lv = F.level(all);
     const wk = F.points(state.data.sessions, state.data.activities, u, S.mondayOf(TODAY()), TODAY());
-    parts.push(`<div class="small"><b>Level ${lv.i + 1} · ${esc(lv.name)}</b> · ${wk} pts this week</div>${lv.next ? `<div class="level-bar"><div style="width:${Math.round(lv.into / lv.next * 100)}%"></div></div>` : ""}`);
+    const pct = lv.next ? Math.round(lv.into / lv.next * 100) : 100;
+    parts.push(`<div class="stat-tile"><div class="st-level">Level ${lv.i + 1} · ${esc(lv.name)}</div><div class="level-bar" role="progressbar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div style="width:${pct}%"></div></div><div class="st-sub">${wk} pts this week</div></div>`);
   }
-  return parts.join("");
+  return parts.length ? `<div class="stat-tiles">${parts.join("")}</div>` : "";
 }
 function ring(done, total) {
-  const r = 24, c = 2 * Math.PI * r, pct = total ? done / total : 0;
-  return `<svg class="ring-svg" viewBox="0 0 56 56" aria-hidden="true"><circle class="bg" cx="28" cy="28" r="${r}"/><circle class="fg" cx="28" cy="28" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct)}"/><text x="28" y="32" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">${done}/${total}</text></svg>`;
+  const r = 31, c = 2 * Math.PI * r, pct = total ? done / total : 0;
+  return `<div class="pring" role="img" aria-label="${done} of ${total} exercises done"><svg class="ring-svg" viewBox="0 0 72 72" aria-hidden="true"><circle class="bg" cx="36" cy="36" r="${r}"/><circle class="fg" cx="36" cy="36" r="${r}" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - pct)).toFixed(1)}"/></svg><span class="ring-n big-num" aria-hidden="true">${done}/${total}</span></div>`;
 }
 
 // ---------------------------------------------------------------- plan builder helpers
@@ -1164,10 +1188,10 @@ function drawA11y() {
       ${tog("plain", "Plain text style", "No italics, no ALL CAPS, no stretched letters. Everything left-aligned.")}
       ${A.canSpeak() ? tog("readAloud", "Read-aloud buttons", "A 🔊 button on every exercise and stretch reads the instructions out loud.") : ""}</section>
     <section class="card"><h3 class="h3">Hearing</h3>
-      ${tog("flash", "Flash the screen for timers", "A gentle color pulse on 3, 2, 1, and GO, and when time is up, with the word in big letters. One pulse at a time, never strobing.")}
+      ${tog("flash", "Visual alerts", "A gentle color pulse on 3, 2, 1, and GO, and when time is up, with the word in big letters. One pulse at a time, never strobing.")}
       ${a.flash ? `<button type="button" class="btn small" data-act="a11yTestFlash">Show me</button>` : ""}
       ${tog("captions", "Captioned videos", "Form-video links only look for videos with captions (CC).")}
-      ${tog("vibrate", "Vibrate with timers", "Buzzes on the countdown and when time is up. Works on Android; iPhone web apps can't vibrate.")}
+      ${tog("vibrate", "Haptics", "Buzzes on the countdown and when time is up. Works on Android; iPhone web apps can't vibrate.")}
       <p class="small muted">Every sound in the app also shows on screen. Timers always show the countdown and "Done".</p></section>
     <section class="card"><h3 class="h3">Screen readers &amp; voice</h3>
       ${A.canSpeak() ? tog("speak", "Talk me through timers", "Says 3, 2, 1, go, halfway, 10 seconds, and time's up.") : ""}
@@ -1177,7 +1201,8 @@ function drawA11y() {
       ${tog("focusMode", "One step at a time", "The Workout tab shows just the current step (warm-up, cardio, each exercise, check-in) with Back and Next. Saving moves you on.")}
       ${tog("autoRest", "Start the rest timer when I check off a set", "So you don't have to remember to.")}
       ${choice("toastTime", Object.entries(L.toastTime), "Pop-up messages stay for")}
-      ${tog("calm", "Calm mode", "No confetti, celebration sounds, or buzzing. Timers still beep.")}</section>
+      ${tog("calm", "Calm mode", "No confetti, celebration sounds, or buzzing. Timers still beep.")}
+      ${tog("themeVoice", "Theme voice", "Bunny and The Lanai write captions and pop-ups in their own playful voice. Screen readers always hear the plain wording, and safety and injury notes are never themed.")}</section>
     <section class="card"><h3 class="h3">Motion</h3>
       ${choice("motion", Object.entries(L.motion), "Animation")}
       <p class="small muted">Nothing in the app ever flashes more than once a second.</p></section>
@@ -1548,8 +1573,9 @@ function saveExercise(c) {
   store.set(xKey(c.u, c.date), getExtras(c.u, c.date).filter(x => x.id !== c.id));
   state.editing.delete(editKey(c.u, c.date, c.id));
   const voice = P(state.user).voice;
-  if (isPR) celebrate("pr", F.say(voice, "pr", { name: def.name }));
-  else celebrate("save", F.say(voice, "saveEx", { name: def.name }));
+  const sk = voiceSkin();
+  if (isPR) celebrate("pr", sayV("pr", { name: def.name }, c.u), sk ? F.plain("pr", { name: def.name }) : null);
+  else celebrate("save", sayV("saveEx", { name: def.name }, c.u), sk ? F.plain("saveEx", { name: def.name }) : null);
 }
 function saveCardio(skip) {
   const u = LU(), date = LD(); const form = $("#cardio-form");
@@ -1633,10 +1659,10 @@ document.addEventListener("click", e => {
     case "endDeload": save("settings", `deload_${LU()}`, { from: deloadOf(LU()).from, to: S.addDays(TODAY(), -1) }); toast("Lighter week ended."); break;
     case "warmupDone": focusSaved(); writeSession(LU(), LD(), { warmup: true, ...(!sessionFor(LU(), LD())?.startedAt && LD() === TODAY() ? { startedAt: Date.now() } : {}) }); celebrate("quiet", F.say(P(state.user).voice, "saveEx", { name: "Warm-up" })); render(); break;
     case "undoWarmup": writeSession(LU(), LD(), { warmup: false }); render(); break;
-    case "startWorkout": F.unlockAudio(); writeSession(LU(), LD(), { startedAt: Date.now() }); toast(F.say(P(state.user).voice, "start")); render(); break;
+    case "startWorkout": F.unlockAudio(); writeSession(LU(), LD(), { startedAt: Date.now() }); toastV("start", { title: dayTitle(LU(), state.sel.week, state.sel.day).split(",")[0].toLowerCase() + " day" }); render(); break;
     case "finishWorkout": { writeSession(LU(), LD(), { finishedAt: Date.now() }); const u = LU(), d = LD(); setTimeout(() => { openSummary(u, d); celebrate("finish"); }, 120); break; }
     case "showSummary": openSummary(LU(), LD()); break;
-    case "hi5": { const to = other(LU()); save("pings", `to_${to}`, { from: LU(), to, at: Date.now() }); const b = document.createElement("div"); b.className = "hi5-burst"; b.textContent = "🙌"; document.body.appendChild(b); setTimeout(() => b.remove(), 1400); toast(F.say(P(state.user).voice, "hi5sent", { name: P(to).name })); break; }
+    case "hi5": { const to = other(LU()); save("pings", `to_${to}`, { from: LU(), to, at: Date.now() }); const b = document.createElement("div"); b.className = "hi5-burst"; b.textContent = "🙌"; document.body.appendChild(b); setTimeout(() => b.remove(), 1400); toastV("hi5sent", { name: P(to).name }); break; }
     case "calMonth": state.calMonth = v; render(); break;
     case "planMove": {
       const c = cardFor(el); const { week, day } = state.sel;
@@ -1702,7 +1728,7 @@ document.addEventListener("click", e => {
     case "focusAll": state.focusAll = true; render(); break;
     case "setShare": saveProfile(state.user, { share: v }); A.announce(`Sharing set to ${SHARE_LABEL[v]}`); setTimeout(render, 60); break;
     case "goCrew": closeOverlay(); go("crew"); break;
-    case "hi5to": { const to = el.dataset.u; save("pings", `to_${to}`, { from: state.user, to, at: Date.now() }); toast(F.say(P(state.user).voice, "hi5sent", { name: P(to).name })); A.buzz(40); break; }
+    case "hi5to": { const to = el.dataset.u; save("pings", `to_${to}`, { from: state.user, to, at: Date.now() }); toastV("hi5sent", { name: P(to).name }); A.buzz(40); break; }
     case "toggleEx": {
       const card = el.closest("[data-ex]"); const u = LU(), date = LD(); const k = openKey(u, date);
       const m = store.get(k, {}); const opening = el.getAttribute("aria-expanded") !== "true"; m[card.dataset.ex] = opening; store.set(k, m);
@@ -1726,7 +1752,8 @@ document.addEventListener("click", e => {
       if (set.done) { A.buzz(30); A.announce(`Set ${c.si + 1} checked off. ${c.d.sets.filter(x => x.done).length} of ${c.d.sets.length} done.`); } else A.announce(`Set ${c.si + 1} unchecked.`);
       if (set.done && A.get().autoRest && defOf(c.ex, c.d.variant).kind !== "time" && c.d.sets.some(x => !x.done)) { openTimer(c.id); T.start("rest", state.timer.total, "Rest"); }
       if (defOf(c.ex, c.d.variant).kind === "time") { T.stop(`set:${c.u}|${c.date}|${c.id}|${c.si}`); render(); break; }
-      el.setAttribute("aria-checked", set.done); el.textContent = set.done ? "✓" : c.si + 1; el.closest(".set").classList.toggle("is-done", set.done);
+      el.setAttribute("aria-checked", set.done); el.innerHTML = set.done ? icon("check", 22) : ""; el.closest(".set").classList.toggle("is-done", set.done);
+      { const all = c.d.sets.every(x => x.done); c.card.classList.toggle("all-done", all); const n = c.card.querySelector(".ex-num"); if (n) { n.classList.toggle("filled", all); n.innerHTML = all ? icon("check", 18) : String(todaysList(c.u, c.date).findIndex(x => x.ex.id === c.id) + 1); } }
       c.card.querySelector("[data-act=saveEx]")?.classList.toggle("ready", c.d.sets.every(x => x.done)); break;
     }
     case "delSet": { const c = cardFor(el); c.d.sets.splice(c.si, 1); putDraft(c.u, c.date, c.id, c.d); render(); break; }
@@ -1921,7 +1948,9 @@ function updateSync() {
   else if (!navigator.onLine) { cls = "offline"; text = "Offline"; }
   else if (f.some(x => x.pending)) { cls = "pending"; text = "Syncing"; }
   else if (f.length < COLLECTIONS.length || f.some(x => x.fromCache)) { cls = "pending"; text = "Connecting"; }
-  el.className = "sync " + cls; el.textContent = text; el.title = text; el.setAttribute("aria-label", "Sync: " + text);
+  el.className = "sync visually-hidden " + cls; el.textContent = `Sync: ${text}`;
+  // The sync state shows as the small dot on your avatar; screen readers get the words.
+  const w = $("#who"); if (w) { w.dataset.sync = cls || "ok"; w.setAttribute("aria-label", `${P(state.user)?.name || ""}, ${text.toLowerCase()}. Switch person`); }
 }
 addEventListener("online", updateSync); addEventListener("offline", updateSync);
 
@@ -1987,7 +2016,7 @@ function viewSignIn() {
   const a = state.auth; const create = a.mode === "create";
   return `<section class="signin">
     <button class="btn small a11y-entry" data-act="openA11y"><span aria-hidden="true">♿</span> Accessibility</button>
-    ${logoHtml()}<h2 class="visually-hidden">Two-Week Split</h2>
+    ${logoHtml()}<h2 class="visually-hidden">${esc(APP_NAME)}</h2>
     <p class="muted">Sign in to see your crew's workouts on any phone.</p>
     ${a.error ? `<div class="banner" role="alert">${esc(a.error)}</div>` : ""}
     ${a.notice ? `<div class="reminders">${esc(a.notice)}</div>` : ""}
@@ -2052,6 +2081,7 @@ function accountCard() {
   </section>`;
 }
 
+$("#app-name").textContent = APP_NAME;
 render();
 if ("serviceWorker" in navigator) {
   const hadController = !!navigator.serviceWorker.controller;

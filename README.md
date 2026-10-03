@@ -23,7 +23,9 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 
 **Make it yours (Settings)**
 - Profiles for anyone, set up in the app: goals, focus areas, aches to track, default version, cardio style, bike commute.
-- Themes: Bunny (the logo's charcoal and pink, default), Gym Floor, Synthwave, Iron & Chalk, Arcade, Clean Light. Accent color, text size, avatar.
+- Themes: Bunny (charcoal and hot pink, Cormorant Garamond titles and big numbers; default), The Lanai (Miami 1985: wicker cream, seafoam, coral, DM Serif Display), Gym Floor, Synthwave, Iron & Chalk, Arcade, Clean Light. Every theme uses the same components (Kit v2 in `css/styles.css`); a theme only swaps tokens. Accent color, text size, avatar.
+- Theme voice: Bunny and The Lanai write captions and pop-ups in their own voice (Settings → Accessibility → Theme voice). Screen readers always hear the plain wording; safety and injury text is never themed.
+- The app's name is set in one place: `APP_NAME` in `js/app.js` (plus `manifest.webmanifest` and the `<title>` tags in `index.html`).
 - Personality: Hype, Chill or Just the numbers. Fun level: Light (record celebrations, badges), Medium (+ streaks, progress ring, finish screen, high-fives), Full (+ points, levels, weekly leaderboard).
 
 **Gym library (Gym tab)**

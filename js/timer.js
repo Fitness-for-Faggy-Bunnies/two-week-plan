@@ -125,6 +125,7 @@ function step() {
   if (active.phase === "run") {
     active.left = Math.max(0, (active.endAt - now) / 1000);
     if (active.total >= 20 && active.left <= active.total / 2 && !said.half && active.left > 11) { said.half = 1; emit("half"); }
+    if (active.total > 40 && active.left <= 30 && !said.thirty && active.left > 11) { said.thirty = 1; emit("thirty"); }
     if (active.total > 15 && active.left <= 10 && !said.ten && active.left > 0) { said.ten = 1; emit("ten"); }
     if (active.left <= 0) {
       active.phase = "done"; clearInterval(tick); unlockScreen();

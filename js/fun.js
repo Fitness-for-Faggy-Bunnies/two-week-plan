@@ -29,7 +29,31 @@ const LINES = {
     level: ["Level: {name}."]
   }
 };
-export function say(voice, key, vars = {}) {
+// Theme voices (Bunny, The Lanai). Captions and toasts only; never safety, injury, or error text.
+// Screen readers always get the plain line (see plain()).
+const THEME_LINES = {
+  bunny: {
+    start: ["{title} today. Let's hop to it."], saveEx: ["{name} logged. Nice form."], pr: ["{name}. New personal best. Show-off."],
+    finish: ["That's a wrap. Go stretch."], cardio: ["Cardio's in. Look at you."], checkin: ["Check-in saved. Noted."],
+    badge: ["Badge: {name}. Show-off."], hi5sent: ["High-five sent to {name}."], hi5got: ["{name} high-fived you. Your move."],
+    level: ["You're {name} now. Who even are you?"]
+  },
+  lanai: {
+    start: ["Picture it: the lanai, {title}."], saveEx: ["Lovely, dear. {name} is in the books."], pr: ["{name}! Somebody call the girls."],
+    finish: ["All done. Cheesecake on the lanai."], cardio: ["Cardio's done. Sit a spell."], checkin: ["Check-in saved. Ma would be proud."],
+    badge: ["New badge: {name}. Somebody call the girls."], hi5sent: ["High-five sent to {name}, sweetheart."], hi5got: ["{name} high-fived you. Isn't that nice."],
+    level: ["You're {name} now, sweetheart."]
+  }
+};
+export const hasThemeVoice = skin => !!THEME_LINES[skin];
+// The plain wording, for screen readers and when theme voice is off.
+export function plain(key, vars = {}) {
+  const p = { start: "Workout started.", saveEx: "{name} saved.", pr: "New personal best: {name}.", finish: "Workout complete.", cardio: "Cardio saved.", checkin: "Check-in saved.",
+    badge: "New badge: {name}.", hi5sent: "High-five sent to {name}.", hi5got: "{name} sent you a high-five.", level: "New level: {name}." }[key] || "";
+  return p.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+}
+export function say(voice, key, vars = {}, skin = null) {
+  if (skin && THEME_LINES[skin]?.[key]) { const t = THEME_LINES[skin][key]; return t[Math.floor(Math.random() * t.length)].replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ""); }
   const set = (LINES[voice] || LINES.chill)[key] || LINES.chill[key] || [""];
   const line = set[Math.floor(Math.random() * set.length)];
   return line.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");

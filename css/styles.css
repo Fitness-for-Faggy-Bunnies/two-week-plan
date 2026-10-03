@@ -23,7 +23,7 @@ h1,h2,h3,h4{font-family:var(--display);margin:0;letter-spacing:.01em;text-wrap:b
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-a{color:var(--accent);font-weight:600}
+a{color:var(--accent-text);font-weight:600}
 .hidden{display:none!important}
 
 /* header */
@@ -44,7 +44,7 @@ main{max-width:760px;margin:0 auto;padding:16px;display:grid;gap:16px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs button{border:0;background:none;height:var(--nav-h);display:grid;place-items:center;gap:0;font:600 .78rem var(--body);color:var(--muted);padding:6px 0}
 nav.tabs button span{font-size:1.25rem;line-height:1}
-nav.tabs button[aria-current="page"]{color:var(--accent)}
+nav.tabs button[aria-current="page"]{color:var(--accent-text)}
 nav.tabs button[aria-current="page"] span{transform:translateY(-1px)}
 
 /* common pieces */
@@ -92,7 +92,7 @@ h3.name,.ex .name{font-family:var(--body);font-weight:700;font-size:1.05rem;lett
 .ex .why{color:var(--muted);font-size:.93rem}
 .ex .note{font-size:.9rem;border-left:3px solid var(--accent);padding-left:8px}
 details.more{border-top:1px dashed var(--line);padding-top:6px}
-details.more summary{cursor:pointer;list-style:none;font:600 .95rem var(--display);text-transform:uppercase;letter-spacing:.07em;color:var(--accent);padding:4px 0;display:flex;gap:8px}
+details.more summary{cursor:pointer;list-style:none;font:600 .95rem var(--display);text-transform:uppercase;letter-spacing:.07em;color:var(--accent-text);padding:4px 0;display:flex;gap:8px}
 details.more summary::-webkit-details-marker{display:none}
 details.more summary::before{content:"+";font-family:var(--mono)}
 details.more[open] summary::before{content:"−"}
@@ -116,7 +116,7 @@ details.more[open] summary::before{content:"−"}
 .tmr-label{font:700 .72rem var(--body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);flex-basis:100%}
 .tmr-clock{font:700 1.9rem/1 var(--mono);font-variant-numeric:tabular-nums;min-width:4.2ch;margin-right:auto}
 .tmr.counting .tmr-clock,.tmr.done .tmr-clock{color:var(--plate)}
-.tmr.running .tmr-clock{color:var(--accent)}
+.tmr.running .tmr-clock{color:var(--accent-text)}
 .tmr-bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
 .tmr-bar i{display:block;height:100%;background:var(--accent);transition:width .15s linear}
 .tmr.done .tmr-bar i{background:var(--plate)}
@@ -209,7 +209,7 @@ pre.summary{white-space:pre-wrap;background:var(--inset);border-radius:10px;padd
 .done-card .head{align-items:center}
 .tick{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--bg);font-size:.8rem;margin-right:8px;vertical-align:1px}
 .cardio-card.done-card{border-style:solid}
-.add-ex{border-style:dashed;color:var(--accent);font-weight:700}
+.add-ex{border-style:dashed;color:var(--accent-text);font-weight:700}
 .pick-list{display:grid;gap:6px}
 .list-btn{display:grid;text-align:left;gap:2px;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:10px 12px}
 .ex .sets{display:grid}
@@ -240,7 +240,8 @@ pre.summary{white-space:pre-wrap;background:var(--inset);border-radius:10px;padd
    Each theme redefines the tokens; components only use tokens. */
 html{font-size:16px}
 body{font-size:1rem}
-:root{--radius:12px; --glow:none; --card-shadow:none}
+:root{--radius:12px; --glow:none; --card-shadow:none; --hair:var(--line); --num:var(--mono)}
+body{--accent-text:var(--accent)}
 /* computed on body so each theme's own surface and accent are used */
 body{--accent-soft:color-mix(in srgb, var(--accent) 24%, var(--surface)); --on-accent:#fff}
 body[data-skin="arcade"],body[data-skin="floor"]{--on-accent:var(--bg)}
@@ -263,7 +264,7 @@ body[data-skin="synthwave"]::before{content:"";position:fixed;left:-50%;right:-5
   transform:perspective(320px) rotateX(62deg);transform-origin:bottom;-webkit-mask-image:linear-gradient(transparent,#000 70%);mask-image:linear-gradient(transparent,#000 70%)}
 body[data-skin="synthwave"]::after{content:"";position:fixed;left:50%;top:58vh;width:62vw;max-width:420px;aspect-ratio:1;transform:translate(-50%,-50%);z-index:-2;pointer-events:none;border-radius:50%;opacity:.28;
   background:repeating-linear-gradient(180deg,transparent 0 58%,#12061f 58% 62%,transparent 62% 70%),linear-gradient(#ffd23f,#ff3fd8 70%)}
-body[data-skin="synthwave"] h1,body[data-skin="synthwave"] .h2,body[data-skin="synthwave"] .h3{color:var(--accent);text-shadow:var(--glow);letter-spacing:.06em}
+body[data-skin="synthwave"] h1,body[data-skin="synthwave"] .h2,body[data-skin="synthwave"] .h3{color:var(--accent-text);text-shadow:var(--glow);letter-spacing:.06em}
 body[data-skin="synthwave"] .h2{font-size:1.35rem}
 body[data-skin="synthwave"] .mono,body[data-skin="synthwave"] .stat .v,body[data-skin="synthwave"] .clock,body[data-skin="synthwave"] .tmr-clock{color:#3ff6ff;text-shadow:0 0 8px rgb(63 246 255 / .55)}
 body[data-skin="synthwave"] .top,body[data-skin="synthwave"] nav.tabs{background:rgb(18 6 31 / .9);backdrop-filter:blur(8px)}
@@ -387,21 +388,51 @@ body[data-tone="dark"] .brand-logo .on-light{display:none}
 body[data-tone="dark"] .brand-logo .on-dark{display:block}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* --- Bunny: the logo's charcoal and hot pink, with its serif */
+/* --- Bunny (redesign, Oct 2026): charcoal and hot pink, Cormorant Garamond titles and big numbers, Hanken Grotesk text.
+   Pink means "now" or "you won": one filled pink control per screen. */
 body[data-skin="bunny"]{
-  --bg:#2d2b2b; --surface:#383535; --inset:#433f3f; --ink:#f5f0f2; --muted:#c3b8bd; --line:#4d4848;
-  --accent:#ff6fc0; --plate:#ff9fd0; --plate-soft:rgb(251 64 173 / .14); --good:#6fd6a2; --good-soft:rgb(111 214 162 / .14); --warn:#ffcf6b; --warn-soft:rgb(255 207 107 / .14); --bad:#ff7a8a;
-  --display:"EB Garamond",Garamond,Georgia,serif; --radius:18px; --card-shadow:0 1px 0 rgb(255 255 255 / .03) inset;
-  --on-accent:#2d2b2b; color-scheme:dark; background:#2d2b2b;
+  --bg:#211f1f; --surface:#2c2929; --inset:#373333; --ink:#f7f1f3; --muted:#c4b9be;
+  --line:#5a5254; --hair:#443e40;
+  --accent:#fb40ad; --on-accent:#1a1818; --accent-soft:rgba(251,64,173,.12); --accent-text:#ff7cc6; /* pink for small text: 5.2:1+ on every surface */
+  --plate:#fb40ad; --plate-soft:rgba(251,64,173,.14);
+  --good:#7fdcae; --good-soft:rgba(127,220,174,.14);
+  --warn:#ffd27a; --warn-soft:rgba(255,210,122,.14);
+  --bad:#ff8f9b;
+  --mat:#8ad1c2; --benny:#b7a6ff;
+  --display:"Cormorant Garamond",Georgia,serif; --body:"Hanken Grotesk",system-ui,sans-serif; --num:var(--display);
+  --radius:22px; --glow:0 0 18px rgba(251,64,173,.7); --card-shadow:none;
+  --stripe:linear-gradient(90deg,#fb40ad,#ff8fcf 60%,#fb40ad);
+  color-scheme:dark; background:#211f1f;
 }
-body[data-skin="bunny"] h1,body[data-skin="bunny"] .h2,body[data-skin="bunny"] .h3,body[data-skin="bunny"] .pick h2,body[data-skin="bunny"] .signin h2{font-style:italic;text-transform:none;letter-spacing:0;font-weight:700}
-body[data-skin="bunny"] .h2{font-size:1.9rem}
-body[data-skin="bunny"] .h3{font-size:1.35rem}
-body[data-skin="bunny"] .eyebrow{letter-spacing:.3em;font-style:italic;font-family:var(--display);font-size:.85rem;text-transform:uppercase}
-body[data-skin="bunny"] .card{border-color:#433f3f}
-body[data-skin="bunny"] .done-card{border-color:var(--accent)}
-body[data-skin="bunny"] .btn.primary{font-weight:700}
-body[data-skin="bunny"] .h2::after{content:"";display:block;width:56px;height:2px;background:#fb40ad;margin-top:6px}
+body[data-skin="bunny"] h1,body[data-skin="bunny"] .h2,body[data-skin="bunny"] .h3,body[data-skin="bunny"] .pick h2,body[data-skin="bunny"] .signin h2{font-family:var(--display);font-style:italic;font-weight:600;text-transform:none;letter-spacing:0}
+body[data-skin="bunny"] .h2{font-size:2.375rem;line-height:1}
+body[data-skin="bunny"] .h3{font-size:1.625rem}
+body[data-skin="bunny"] .eyebrow{font-family:var(--body);font-style:normal;font-weight:600;font-size:.8125rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+body[data-skin="bunny"] .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+body[data-skin="bunny"] .btn.primary{background:var(--accent);color:var(--on-accent);border:0;border-radius:999px;font-weight:700}
+body[data-skin="bunny"] :is(.risk h4,.jchip.high,.pill.down,.bad-text){color:var(--accent-text)}
+
+/* --- The Lanai: Miami, 1985. Wicker cream, seafoam buttons, coral numbers. Peach and seafoam are decoration only. */
+body[data-skin="lanai"]{
+  --bg:#fbf1e4; --surface:#fffaf3; --inset:#f3e6d4; --ink:#2e2622; --muted:#665a50;
+  --line:#d9c3a8; --hair:#eadbc6;
+  --accent:#1f6f66; --on-accent:#ffffff; --accent-soft:rgba(31,111,102,.12);
+  --plate:#a33f33; --plate-soft:rgba(163,63,51,.12); /* coral, darkened from #b2473a for 4.5:1 on the tan tiles */
+  --good:#276a45; --good-soft:#dcefe3; --warn:#8a5a10; --warn-soft:#f6ebd2; --bad:#b23a3a;
+  --mat:#1f6f66; --benny:#6a4fb3;
+  --display:"DM Serif Display",Georgia,serif; --body:"Hanken Grotesk",system-ui,sans-serif; --num:var(--display);
+  --radius:20px; --glow:none; --card-shadow:0 1px 2px rgba(80,50,20,.06);
+  --stripe:repeating-linear-gradient(90deg,#f4b393 0 18px,#fffaf3 18px 24px,#9fd3c7 24px 42px,#fffaf3 42px 48px);
+  color-scheme:light; background:#fbf1e4;
+}
+body[data-skin="lanai"] h1,body[data-skin="lanai"] .h2,body[data-skin="lanai"] .h3,body[data-skin="lanai"] .pick h2,body[data-skin="lanai"] .signin h2{font-family:var(--display);font-style:italic;font-weight:400;text-transform:none;letter-spacing:0}
+body[data-skin="lanai"] .h2{font-size:2.25rem;line-height:1.05}
+body[data-skin="lanai"] .h3{font-size:1.5rem}
+body[data-skin="lanai"] .eyebrow{font-family:var(--body);font-style:normal;font-weight:600;font-size:.8125rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+body[data-skin="lanai"] .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+body[data-skin="lanai"] .stat .v,body[data-skin="lanai"] .clock,body[data-skin="lanai"] .big-num{color:var(--plate);font-variant-numeric:lining-nums tabular-nums}
+body[data-skin="lanai"] .top{border-top:6px solid transparent;border-image:var(--stripe) 1;border-bottom:1px solid var(--hair)}
+body[data-skin="lanai"] .btn.primary{background:var(--accent);color:var(--on-accent);border:0;border-radius:999px;font-weight:700}
 
 /* =====================================================================
    ACCESSIBILITY
@@ -434,7 +465,7 @@ body[data-skin="bunny"] .h2::after{content:"";display:block;width:56px;height:2p
 .a11y-tog small{display:block;color:var(--muted);font-size:.85rem;font-weight:400;margin-top:2px}
 .a11y-tog input{width:24px;height:24px;flex:none;margin-top:2px}
 .chart-table{margin-top:6px}
-.chart-table summary{cursor:pointer;color:var(--accent);font-weight:600;padding:6px 0}
+.chart-table summary{cursor:pointer;color:var(--accent-text);font-weight:600;padding:6px 0}
 .cal .dots i.bike{background:transparent;width:auto;height:auto;font-size:8px;line-height:8px}
 .cal-key{display:inline-block;width:10px;height:10px;border-radius:50%}
 /* focus mode */
@@ -479,7 +510,7 @@ body.a11y-colorSafe .sync.error::before{content:"!";width:auto;height:auto;backg
 
 /* High contrast (also turns on by itself when the phone asks for more contrast, if Contrast is "Match my phone") */
 body[data-contrast="high"][data-skin]{--bg:#000!important;--surface:#000!important;--inset:#111!important;--ink:#fff!important;--muted:#ededed!important;--line:#fff!important;
-  --accent:#ffe14d!important;--accent-soft:#3d3500!important;--on-accent:#000!important;--plate:#ffb84d!important;--plate-soft:#3d2600!important;--good:#7dffa0!important;--good-soft:#00331a!important;
+  --accent:#ffe14d!important;--accent-text:#ffe14d!important;--accent-soft:#3d3500!important;--on-accent:#000!important;--plate:#ffb84d!important;--plate-soft:#3d2600!important;--good:#7dffa0!important;--good-soft:#00331a!important;
   --warn:#ffd24d!important;--warn-soft:#3d3000!important;--bad:#ff8f8f!important;--mat:#7fe0c8!important;--mat-soft:#003328!important;--benny:#b3c4ff!important;--benny-soft:#001a4d!important;background:#000!important;background-image:none!important;color:#fff}
 body[data-contrast="high"] *{text-shadow:none!important;box-shadow:none;background-image:none}
 body[data-contrast="high"] .card,body[data-contrast="high"] .btn,body[data-contrast="high"] input,body[data-contrast="high"] select,body[data-contrast="high"] textarea,body[data-contrast="high"] .seg,body[data-contrast="high"] .stretch,body[data-contrast="high"] .tmr,body[data-contrast="high"] .set .setcheck,body[data-contrast="high"] .chips button{border:2px solid #fff!important}
@@ -585,3 +616,171 @@ details.more.sub summary{font-size:.85rem}
 .crew-week td.did{color:var(--on-accent);background:var(--accent);border-radius:6px}
 .crew-week .today{box-shadow:inset 0 -3px 0 var(--accent)}
 .crew-privacy{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+
+/* =====================================================================
+   KIT v2 (Oct 2026 design handoff). Same components for every theme; each theme supplies tokens.
+   Bunny and The Lanai add italic serif titles and big numbers below.
+   Motion: quick 140ms ease-out · settle 320ms cubic-bezier(.2,.8,.2,1) · pop 420ms cubic-bezier(.3,1.6,.5,1)
+   ===================================================================== */
+:root{--nav-h:66px;--settle:320ms cubic-bezier(.2,.8,.2,1);--pop:420ms cubic-bezier(.3,1.6,.5,1)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.big-num{font-family:var(--num);font-weight:600;font-variant-numeric:lining-nums tabular-nums}
+
+/* header: ears · name · person pill (with sync dot) · round settings */
+.top{padding:calc(env(safe-area-inset-top,0px) + 14px) 16px 12px;gap:10px;border-bottom:1px solid var(--hair)}
+.top .brand-mark{flex:none;width:26px;height:20px}
+.top h1{font-size:1.25rem;line-height:1.1;flex:1;min-width:0;margin:0}
+.who{display:flex;align-items:center;gap:8px;height:44px;padding:4px 12px 4px 4px;border:1.5px solid var(--line);border-radius:999px;background:none;color:var(--ink);font:600 .9375rem var(--body);text-transform:none;letter-spacing:0;flex:none;max-width:45vw}
+.who .who-name{overflow:hidden;text-overflow:ellipsis}
+.who .av{width:32px;height:32px;margin:0;position:relative;font-size:.875rem;font-weight:700;flex:none;vertical-align:0}
+.who .online{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:var(--good);border:2px solid var(--bg)}
+.who[data-sync="pending"] .online{background:var(--warn)}
+.who[data-sync="offline"] .online{background:var(--muted)}
+.who[data-sync="error"] .online{background:var(--bad)}
+.icon-btn{width:44px;height:44px;flex:none;border-radius:50%;border:1.5px solid var(--line);background:none;color:var(--ink);display:grid;place-items:center;padding:0;font-size:1.1rem}
+.icon-btn.ghost{border:0;color:var(--muted)}
+.icon-btn:hover{border-color:var(--accent)}
+.icon-btn.ghost:hover{color:var(--ink)}
+
+/* tab bar: dot above the active tab */
+nav.tabs{border-top:1px solid var(--hair);background:var(--surface)}
+nav.tabs button{position:relative;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:500 .8125rem var(--body);color:var(--muted);text-transform:none;letter-spacing:0}
+nav.tabs svg{width:24px;height:24px;margin:0}
+nav.tabs button[aria-current="page"]{color:var(--ink);font-weight:700}
+nav.tabs button[aria-current="page"] svg{color:var(--accent-text)}
+nav.tabs button[aria-current="page"]::before{content:"";position:absolute;top:6px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+/* reminders: one quiet outlined card */
+.reminders{background:none;border:1px solid var(--line);border-radius:20px;padding:6px 6px 6px 16px;display:flex;flex-direction:column;gap:0}
+.rem-title{display:flex;align-items:center;gap:8px;margin:0;padding:10px 0 4px;font:600 .8125rem var(--body);letter-spacing:.18em;text-transform:uppercase;color:var(--warn)}
+.reminders .rem{display:flex;align-items:center;gap:6px;min-height:56px;border-top:1px solid var(--hair);background:none;padding:0}
+.reminders .rem-title + .rem{border-top:0}
+.reminders .rem p{flex:1;margin:0;font-size:.9375rem;line-height:1.4;padding:8px 0}
+.btn.pill{min-height:44px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:none;color:var(--ink);font:600 .875rem var(--body);flex:none}
+.btn.pill:hover{border-color:var(--accent)}
+
+/* week + day pickers */
+.today-top{display:flex;flex-direction:column;gap:18px}
+.week-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.seg{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.seg button{min-height:40px;padding:0 14px;border-radius:10px;white-space:nowrap;font:500 .875rem var(--body);color:var(--muted);background:none;border:0}
+.seg button[aria-pressed="true"]{background:var(--inset);box-shadow:inset 0 -2px 0 var(--accent);color:var(--ink);font-weight:700}
+.chips.day-tiles{gap:8px}
+.chips.day-tiles button{height:72px;border-radius:16px;border:1.5px solid var(--line);background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 2px;color:var(--ink);text-transform:none;letter-spacing:0;min-width:0}
+.day-tiles .d{font:700 .75rem var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.day-tiles .m{font-family:var(--display);font-weight:600;font-size:1rem;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips.day-tiles button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft)}
+.chips.day-tiles button[aria-pressed="true"] .d{color:var(--accent-text)}
+
+/* today header + progress ring */
+.ring-row{display:flex;align-items:center;gap:16px;padding-top:4px}
+.today-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.today-title .h2{text-wrap:balance;margin:0}
+.today-title .h2::after{content:none}
+.pring{position:relative;width:72px;height:72px;flex:none}
+.pring .ring-svg{width:72px;height:72px}
+.pring .ring-svg circle{fill:none;stroke-width:5}
+.pring .ring-svg .bg{stroke:var(--hair)}
+.pring .ring-svg .fg{stroke:var(--accent);stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset var(--settle)}
+.pring .ring-n{position:absolute;inset:0;display:grid;place-items:center;font-size:1.5rem}
+
+/* streak + level tiles */
+.stat-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-tile{background:var(--surface);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-top{display:flex;align-items:center;gap:6px}
+.st-top .ico{color:var(--warn);flex:none}
+.st-top .big-num{font-size:1.875rem;line-height:1}
+.st-unit{font-weight:600;font-size:.9375rem}
+.st-sub{font-size:.875rem;color:var(--muted)}
+.st-level{font-weight:700;font-size:.875rem}
+.stat-tile .level-bar{height:8px;background:var(--inset);border-radius:99px;overflow:hidden;margin:6px 0}
+.stat-tile .level-bar div{height:100%;background:var(--ink);border-radius:99px}
+
+/* the one filled button */
+.start-btn{min-height:56px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:1.0625rem;border-radius:999px}
+
+/* disclosures: a row with a chevron that turns */
+details.more > summary{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:10px;font:600 1rem var(--body);text-transform:none;letter-spacing:0;color:var(--ink);padding:0}
+details.more > summary::before,details.more[open] > summary::before{content:none!important;display:none}
+details.more > summary::after{content:"";flex:none;width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);transition:transform var(--settle);margin-right:6px}
+details.more[open] > summary::after{transform:rotate(-135deg)}
+details.more.row-disclosure{border-top:1px solid var(--hair)}
+details.more.row-disclosure > summary{min-height:56px}
+details.more.row-disclosure > summary::after{content:none}
+details.more.row-disclosure > summary .ico{transition:transform var(--settle)}
+details.more.row-disclosure[open] > summary .ico{transform:rotate(180deg)}
+
+/* exercise cards */
+.card.ex{padding:0;border-radius:20px;gap:0}
+.card.ex.done-card{padding:14px 16px;gap:6px}
+.card.ex .head.ex-head{display:block}
+.ex-head h3.name{margin:0;font:inherit}
+.ex-toggle,.ex-toggle:not(.x){all:unset;box-sizing:border-box;width:100%;padding:16px;display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:4px 12px;align-items:start;cursor:pointer;color:var(--ink);text-align:left;border-radius:20px}
+.ex-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.ex-num{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font:700 .9375rem var(--body);font-variant-numeric:lining-nums tabular-nums;background:none;color:var(--ink);padding:0;margin:0;min-width:0}
+.ex-num.filled{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.done-card .head .name{display:flex;align-items:center;gap:10px}
+.ex-main{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ex-name{font-family:var(--display);font-weight:600;font-size:1.2rem;line-height:1.1;text-wrap:balance}
+.ex-tags{display:flex;gap:6px;flex-wrap:wrap}
+.ex-tags .tag{height:24px;padding:0 9px;margin:0;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;font:600 .75rem var(--body);color:var(--muted);background:none;text-transform:none;letter-spacing:0;vertical-align:0}
+.ex-tags .tag::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.ex-tags .tag.new::before{background:var(--warn)}
+.ex-scheme{display:flex;align-items:baseline;gap:3px;white-space:nowrap}
+.ex-scheme .big-num{font-size:1.5rem;line-height:1}
+.ex-scheme .x{font-size:1rem;color:var(--muted)}
+.ex-scheme .unit{font-size:.75rem;color:var(--muted);margin-left:3px;font-weight:600}
+.ex-last{grid-column:2 / 4;font-size:.875rem;color:var(--muted);padding-top:4px;font-variant-numeric:tabular-nums}
+.ex-last b{color:var(--ink)}
+.card.ex.open{border-color:var(--accent)}
+.card.ex.all-done{background:var(--accent-soft)}
+.ex-body{padding:0 16px 16px;display:grid;gap:10px;min-width:0}
+
+/* set logger: number · weight · reps · remove / Easy Right Hard · done circle */
+.set{display:grid;grid-template-columns:44px repeat(3,minmax(0,1fr)) 48px;grid-template-areas:"n w w r r" "del diff diff diff chk";gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--hair)}
+.set.noweight{grid-template-columns:44px repeat(3,minmax(0,1fr)) 48px;grid-template-areas:"n r r r r" "del diff diff diff chk"}
+.set .set-n{grid-area:n;font-size:1.5rem;color:var(--muted);text-align:center}
+.set .sw-w{grid-area:w} .set .sw-r{grid-area:r}
+.set .set-del{grid-area:del;justify-self:center}
+.set .diff{grid-area:diff;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:4px}
+.set .diff button{min-height:40px;border:0;border-radius:10px;background:none;color:var(--muted);font:500 .875rem var(--body)}
+.set .diff button[aria-pressed="true"]{color:var(--on-accent);font-weight:700}
+.set .diff button[aria-pressed="true"][data-d="1"]{background:var(--good);border-color:var(--good);color:var(--on-accent)}
+.set .diff button[aria-pressed="true"][data-d="2"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.set .diff button[aria-pressed="true"][data-d="3"]{background:var(--warn);border-color:var(--warn);color:var(--on-accent)}
+.set .setcheck{grid-area:chk;width:48px;height:48px;border-radius:50%;border:2px solid var(--accent);background:none;color:var(--on-accent);display:grid;place-items:center;padding:0;font-size:inherit;align-self:center}
+.set .setcheck[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.set .setcheck[aria-checked="true"] svg{animation:check-pop var(--pop)}}
+@keyframes check-pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+.stepper input{font-family:var(--num);font-size:1.25rem;font-variant-numeric:lining-nums tabular-nums}
+body.a11y-big-text .set,body.a11y-big-text .set.noweight{grid-template-columns:1fr 1fr!important;grid-template-areas:"n del" "w w" "r r" "diff diff" "chk chk"!important}
+body.a11y-big-text .set.noweight{grid-template-areas:"n del" "r r" "diff diff" "chk chk"!important}
+body.a11y-big-text .set .set-n{text-align:left}
+body.a11y-big-text .set .setcheck{justify-self:start;width:56px;height:56px;min-width:0;padding:0}
+body.a11y-bigTargets .set .setcheck{width:56px;height:56px}
+
+/* avatars in person colors (Bunny + Lanai), dark text on light chips */
+body[data-skin="bunny"] .av[data-p="mat"]{background:var(--mat);color:#1a1818}
+body[data-skin="bunny"] .av[data-p="benny"]{background:var(--benny);color:#1a1818}
+body[data-skin="lanai"] .av[data-p="mat"]{background:var(--mat);color:#fff}
+body[data-skin="lanai"] .av[data-p="benny"]{background:var(--benny);color:#fff}
+
+/* Bunny + Lanai: italic serif for titles and big numbers (never below 24px except card titles, which are 25px) */
+body:is([data-skin="bunny"],[data-skin="lanai"]){line-height:1.55}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .top h1{font-family:var(--display);font-style:italic;font-weight:600;text-transform:none;letter-spacing:0}
+body[data-skin="lanai"] .top h1{font-weight:400}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .ex-name{font-size:1.5625rem;font-style:italic;line-height:1.05}
+body[data-skin="lanai"] .ex-name{font-weight:400}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .day-tiles .m{font-size:1.375rem;font-style:italic}
+body[data-skin="lanai"] .day-tiles .m{font-weight:400}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .big-num{font-style:italic}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .ex-scheme .big-num{font-size:1.625rem}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .stepper input{font-style:italic;font-size:1.5rem}
+body[data-skin="lanai"] .big-num,body[data-skin="lanai"] .ex-scheme .big-num{color:var(--plate);font-weight:400}
+body[data-skin="lanai"] .pring .ring-n{color:var(--ink)}
+.stat .v{font-variant-numeric:lining-nums tabular-nums}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .stat .v{font-family:var(--display);font-style:italic;font-weight:600;font-size:1.75rem;line-height:1.1}
+body[data-skin="lanai"] .stat .v{font-weight:400}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .stat .v small{font-family:var(--body);font-style:normal;font-size:.8125rem;font-weight:600}
+.chips.day-tiles button[aria-pressed="true"] .d{color:var(--ink)}
+body:is([data-skin="bunny"],[data-skin="lanai"]) .chips.day-tiles button[aria-pressed="true"] .d{color:var(--accent-text)}

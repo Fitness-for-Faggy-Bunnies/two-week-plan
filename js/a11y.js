@@ -21,7 +21,7 @@ export const DEFAULTS = {
   readAloud: false,     // "Read aloud" buttons on exercises and stretches
   // Hearing
   flash: false,         // screen flashes gently for timer countdowns and endings
-  captions: false,      // video links look for captioned videos first
+  captions: true,       // video links look for captioned videos first (on by default)
   vibrate: true,        // vibrate with timers (Android; iPhone browsers can't vibrate)
   // Blind / low vision
   speak: false,         // timers talk: 3, 2, 1, go, halfway, 10 seconds, time's up
@@ -30,6 +30,7 @@ export const DEFAULTS = {
   autoRest: false,      // checking off a set starts the rest timer
   toastTime: 4,         // seconds messages stay up (0 = until tapped)
   calm: false,          // no confetti, no celebration sounds
+  themeVoice: true,     // Bunny and The Lanai talk in their own voice (captions and toasts only)
   // Motion
   motion: "system"      // system | reduce | full
 };
@@ -155,6 +156,7 @@ if (typeof document !== "undefined") document.addEventListener("twp-timer", e =>
   if (what === "count") { speak(NUM[n]); flash(String(n)); buzz(40); if (n === 3) announce(`${label ? label + ". " : ""}Starting in 3`, true); }
   if (what === "go") { speak("Go"); flash("GO", true); buzz(120); announce("Go", true); }
   if (what === "half") { speak("Halfway"); announce("Halfway"); }
+  if (what === "thirty") { speak("30 seconds"); announce("30 seconds left"); }
   if (what === "ten") { speak("10 seconds"); announce("10 seconds left", true); }
   if (what === "done") { buzz([180, 120, 180, 120, 180, 120, 180, 120, 180]); speak(label ? `Time's up. ${label} done.` : "Time's up."); flash("DONE", true); announce(label ? `Time's up. ${label} done.` : "Time's up.", true); }
   if (what === "paused") announce("Timer paused");
