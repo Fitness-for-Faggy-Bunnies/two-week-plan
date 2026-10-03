@@ -10,6 +10,8 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
   getUserDoc, setUserDoc, createCrew, joinCrew, watchCrew, updateMember, removeMember, renameCrew, newInviteCode, readLegacy } from "./firebase.js";
 
 // ---------------------------------------------------------------- helpers
+// Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
+const APP_VERSION = "17";
 const $ = (s, r = document) => r.querySelector(s);
 // "a", "a and b", "a, b, and c" (Oxford comma)
 const listText = (xs, word = "and") => xs.length < 3 ? xs.join(` ${word} `) : `${xs.slice(0, -1).join(", ")}, ${word} ${xs[xs.length - 1]}`;
@@ -202,8 +204,8 @@ function consolidate() {
 }
 
 // ---------------------------------------------------------------- per-exercise drafts (kept on this phone until saved)
-const dKey = (u, date, id) => `twp-x-${u}-${date}-${id}`;
-const editKey = (u, date, id) => `${u}|${date}|${id}`;
+const dKey = (u, date, id) => `twp-x-${u}-${date}-${slotKey()}-${id}`;
+const editKey = (u, date, id) => `${u}|${date}|${slotKey()}|${id}`;
 
 function prefillSets(u, def, id, v, date = LD()) {
   const light = deloadActive(u, date) ? x => ({ ...x, sets: lightSets(x.sets, def.db) }) : x => x;
@@ -226,7 +228,7 @@ function getDraft(u, date, ex, logged) {
 const putDraft = (u, date, id, d) => store.set(dKey(u, date, id), d);
 
 // Extra exercises added for a day but not saved yet.
-const xKey = (u, date) => `twp-extra-${u}-${date}`;
+const xKey = (u, date) => `twp-extra-${u}-${date}-${slotKey()}`;
 const getExtras = (u, date) => store.get(xKey(u, date), []);
 
 function todaysList(u, date) {
@@ -366,7 +368,7 @@ function focusSteps(u, date, s, list) {
 }
 // Collapsible tiles: the next exercise you haven't done opens by itself; tap any header to open or close it.
 // Your taps are remembered on this phone for the day. A tile with sets checked off or a timer running stays open.
-const openKey = (u, date) => `twp-open-${u}-${date}`;
+const openKey = (u, date) => `twp-open-${u}-${date}-${slotKey()}`;
 function isOpen(u, date, id, d, force) {
   if (force || state.planEdit) return true;
   const choice = store.get(openKey(u, date), {})[id];
@@ -1090,7 +1092,7 @@ function openSettings() {
       <p class="small muted">Today is in Week ${ci.week}. Shared by everyone.</p></section>
     <section class="card"><h3 class="h3">Install on your phone</h3>
       <p class="small"><b>iPhone:</b> open this page in Safari, tap Share, then Add to Home Screen.</p>
-      <p class="small"><b>Android:</b> open it in Chrome, tap the ⋮ menu, then Install app.</p></section>
+      <p class="small"><b>Android:</b> open it in Chrome, tap the ⋮ menu, then Install app.</p><p class="small muted">App version ${APP_VERSION}. If a fix isn't showing up, close the app completely (swipe it away) and open it again.</p></section>
     <section class="card"><h3 class="h3">Backup</h3>
       <div class="row"><button class="btn" data-act="export">Download backup</button><label class="btn">Restore backup<input type="file" accept="application/json" data-act="import" hidden></label></div></section>
   </div></div>`;

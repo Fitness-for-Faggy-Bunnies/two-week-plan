@@ -78,7 +78,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 | `AUDIT.md` | Latest audit: what was checked and fixed. |
 
 ### Changing the plan
-Edit `js/plan.js` on GitHub. Keep each exercise's `id` the same, since logged history is matched by id. After any change, open `sw.js` and bump `VERSION` (for example `twp-v1` → `twp-v2`) so installed phones pick up the update.
+Edit `js/plan.js` on GitHub. Keep each exercise's `id` the same, since logged history is matched by id. After any change, bump `VERSION` in `sw.js` (for example `twp-v1` → `twp-v2`) and `APP_VERSION` in `js/app.js` to match, so installed phones pick up the update and Settings shows the new number.
 
 ## Setup
 1. **Firebase → Authentication → Sign-in method:** turn on **Google** and **Email/Password**. (Anonymous can be turned off.)
