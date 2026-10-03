@@ -5,7 +5,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 ## What it does
 
 **At the gym (Workout tab)**
-- Today's plan with Standard, Harder, Swap and Library versions of every exercise, each with instructions, form videos, joint load and specific injury risks.
+- Today's plan with Standard, Harder, Alternative, and Library versions of every exercise, each with instructions, form videos, joint load, and specific injury risks. A note under the buttons explains the one that's picked.
 - Start workout → timer → Finish workout, with a summary: time, sets, pounds moved, personal bests.
 - Warm-up for each day, with ramp-up sets for the first lift worked out from your weights.
 - Log sets right on the card, pre-filled from last time. Save each exercise as you finish it.
@@ -35,10 +35,15 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 - Library swaps rank by same movement, then same focus, and keep sore spots in mind.
 - Edit or hide any built-in exercise; your version is saved in the database and wins.
 
+**Crew tab**
+- Everyone's progress in one place: who trained each day this week, crew totals for the cycle, and a card per person (workouts, streak, sets, pounds moved, cardio, badges, personal bests, high-five).
+- Each person chooses what the crew sees: Everything, Just that I trained, or Nothing. Default is Everything. This hides it in the app; crewmates' phones still receive the data so partner mode works.
+- Invite code and members live here too.
+
 **Progress**
 - A chart and history for every exercise, weekly sets per focus area, cardio, resting heart rate, and pain.
 - Body tab: weight (with a trend line), waist, hips, chest, thigh, arm, resting heart rate, VO2 max, and how clothes fit.
-- End-of-cycle report every two weeks: what went up, what stalled, and what hurt, plus a summary to paste into Claude for plan adjustments.
+- End-of-cycle report every two weeks (Progress → Cycle report): what went up, what stalled, and what hurt, plus a summary to paste into Claude for plan adjustments.
 - Before & after: compare any two dates.
 
 **Accessibility (Settings → Accessibility, also on the sign-in screen)**

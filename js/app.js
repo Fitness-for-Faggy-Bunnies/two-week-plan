@@ -51,8 +51,10 @@ const cardioProgram = u => CARDIO[P(u).cardio === "intervals" ? "benny" : "mat"]
 const yt = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " proper form") + A.ytParams();
 const ytStretch = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " stretch how to") + A.ytParams();
 const DIFF = ["", "Easy", "Right", "Hard"];
-const VARIANT_LABEL = { std: "Standard", hard: "Harder", swap: "Swap" };
-const vLabel = v => (String(v).startsWith("lib:") ? "Library swap" : VARIANT_LABEL[v] || v);
+const VARIANT_LABEL = { std: "Standard", hard: "Harder", swap: "Alternative" };
+// One line under the version buttons, explaining the one that's picked.
+const VARIANT_NOTE = { std: "The plan's main exercise.", hard: "A tougher version of the same move.", swap: "Use this if the machine is taken or the move bothers you.", lib: "Any exercise or machine at our gym that works the same muscles. Tap Change machine to pick another." };
+const vLabel = v => (String(v).startsWith("lib:") ? "Library" : VARIANT_LABEL[v] || v);
 const GROUPS = ["chest", "shoulders", "arms", "back", "core", "glutes", "legs", "calves", "cardio"];
 const KIND_LABEL = { load: "Weight × reps", bw: "Reps only", time: "Time (seconds)", carry: "Weight × steps", assist: "Assist weight × reps" };
 // Library = built-in list + what's saved in the database (same id: saved version wins; hidden: removed).
@@ -122,7 +124,8 @@ const state = {
   charts: []
 };
 state.partnerId = store.get("twp-partner-id", null);
-if (!["today", "progress", "body", "report", "gym"].includes(state.view)) state.view = "today";
+if (state.view === "report") { state.view = "progress"; state.progTab = "report"; }
+if (!["today", "progress", "body", "crew", "gym"].includes(state.view)) state.view = "today";
 Object.keys(localStorage).filter(k => k.startsWith("twp-draft-")).forEach(k => store.del(k)); // old whole-workout drafts
 
 const cycleStart = () => state.data.settings.find(s => s.id === "app")?.cycleStart || "2026-09-28";
@@ -254,18 +257,23 @@ function render() {
     const s = sessionFor(LU(), LD());
     state.sel = s && s.week && s.day ? { week: s.week, day: s.day } : autoSel();
   }
-  if (!state.viewUser || !profileIds().includes(state.viewUser)) state.viewUser = state.user;
+  if (!state.viewUser || !profileIds().includes(state.viewUser) || !canSee(state.viewUser)) state.viewUser = state.user;
   const banner = state.error ? `<div class="banner" role="alert">${esc(state.error)}</div>` : "";
-  const views = { today: viewToday, progress: viewProgress, body: viewBody, report: viewReport, gym: viewGym };
+  const views = { today: viewToday, progress: viewProgress, body: viewBody, crew: viewCrew, gym: viewGym };
   main.innerHTML = banner + views[state.view]();
   afterRender();
   document.title = `${VIEW_NAMES[state.view] || ""} · Two-Week Split`;
   A.restoreFocus(main);
 }
-const VIEW_NAMES = { today: "Workout", progress: "Progress", body: "Body", report: "Report", gym: "Gym" };
+const VIEW_NAMES = { today: "Workout", progress: "Progress", body: "Body", crew: "Crew", gym: "Gym" };
 
+// How much of someone's progress the rest of the crew sees: all | trained | none. You always see your own.
+const shareOf = id => P(id).share || "all";
+const canSee = id => id === state.user || shareOf(id) === "all";
 function personToggle(act = "viewUser", cur = state.viewUser) {
-  return `<div class="seg" role="group" aria-label="Person">${profileIds().map(u => `<button data-act="${act}" data-u="${u}" aria-pressed="${cur === u}">${avatarHtml(u)}${esc(P(u).name)}</button>`).join("")}</div>`;
+  const ids = act === "viewUser" ? profileIds().filter(canSee) : profileIds();
+  if (act === "viewUser" && ids.length < 2) return "";
+  return `<div class="seg" role="group" aria-label="Person">${ids.map(u => `<button data-act="${act}" data-u="${u}" aria-pressed="${cur === u}">${avatarHtml(u)}${esc(P(u).name)}</button>`).join("")}</div>`;
 }
 function seg(act, current, opts, label, extra = "") {
   return `<div class="seg" role="group" aria-label="${esc(label || act)}">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" ${extra} aria-pressed="${current === v}">${esc(l)}</button>`).join("")}</div>`;
@@ -371,7 +379,7 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   const v = d.variant;
   const lib = String(v).startsWith("lib:") ? libItem(v.slice(4)) : null;
   const def = defOf(ex, v);
-  const opts = [["std", "Standard"]]; if (ex.h) opts.push(["hard", "Harder"]); if (ex.swap) opts.push(["swap", "Swap"]);
+  const opts = [["std", "Standard"]]; if (ex.h) opts.push(["hard", "Harder"]); if (ex.swap) opts.push(["swap", "Alternative"]);
   if (!ex.custom) opts.push(["lib", "Library"]);
   const why = lib ? (lib.how || lib.notes || `From your gym library. Same target: ${ex.sr}.`) : v === "hard" && ex.h ? ex.h.how : v === "swap" && ex.swap ? ex.swap.how : ex.why;
   const last = S.lastTime(state.data.sessions, u, ex.id, v);
@@ -395,8 +403,8 @@ function exerciseCard(u, date, ex, added, s, idx = 0, count = 0, cardOpts = {}) 
   }
   return `<article class="card ex" id="ex-${ex.id}" data-ex="${ex.id}">
     ${head}<div class="ex-body" id="exb-${ex.id}">
-    ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today. Consider a swap.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(listText(sore.some.map(j => (JOINTS[j] || j).toLowerCase())))} today.</div>` : ""}
-    ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") : ""}
+    ${sore.high.length ? `<div class="pill hold">Hard on your ${esc(listText(sore.high.map(j => (JOINTS[j] || j).toLowerCase())))} today. Consider the Alternative or Library version.</div>` : sore.some.length ? `<div class="small warn-text">Some load on your ${esc(listText(sore.some.map(j => (JOINTS[j] || j).toLowerCase())))} today.</div>` : ""}
+    ${opts.length > 1 ? seg("variant", String(v).startsWith("lib:") ? "lib" : v, opts, "Version") + `<p class="v-note small"><b>${esc(vLabel(v))}:</b> ${esc(VARIANT_NOTE[String(v).startsWith("lib:") ? "lib" : v] || "")}</p>` : ""}
     ${why ? `<div class="why">${esc(why)}</div>` : ""}
     ${lib ? `<div class="row"><a class="video" href="${yt(lib.name)}" target="_blank" rel="noopener">Watch form videos</a><button class="btn small" data-act="libSwap">Change machine</button></div>` : ""}
     ${lib?.tip ? `<div class="small muted"><b>Setup:</b> ${esc(lib.tip)}</div>` : ""}
@@ -589,8 +597,8 @@ function drawLibSwap() {
       <span class="small muted">Difficulty ${dots(m.difficulty)} · Effort ${dots(m.effort)} · Impact ${LEVEL.impact[m.impact || 0]}</span>
       ${c.high.length ? `<span class="small bad">Hard on your ${esc(listText(c.high.map(j => JOINTS[j].toLowerCase())))}</span>` : c.some.length ? `<span class="small warn-text">Some load on your ${esc(listText(c.some.map(j => JOINTS[j].toLowerCase())))}</span>` : ""}</button>`;
   };
-  $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Swap from library"><div class="inner">
-    <div class="between"><h2 class="h2">Swap from library</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
+  $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Pick from the library"><div class="inner">
+    <div class="between"><h2 class="h2">Pick from the library</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
     <p class="muted">Instead of <b>${esc(ex.n)}</b>${pattern ? ` (${esc(PATTERN[pattern].toLowerCase())})` : ""}, which works ${esc(listText(ex.focus.filter(f => FOCUS[f]).map(f => FOCUS[f].toLowerCase())))}. Same target: ${esc(ex.sr)}. Best matches first.</p>
     ${aches(u).length ? `<p class="small">Sore today: ${esc(aches(u).map(j => JOINTS[j]).join(", "))}. Change this on the Gym tab.</p>` : ""}
     <section class="card"><div class="pick-list">${ok.length ? ok.map(btn).join("") : `<p class="muted small">No matches in the library yet.</p>`}</div></section>
@@ -712,7 +720,7 @@ function libForm(m) {
 function saveLibrary() {
   const name = $("#lib-name").value.trim(); if (!name) { toast("Give it a name first."); return; }
   const focus = [...document.querySelectorAll("#lib-focus [aria-pressed=true]")].map(b => b.dataset.v);
-  if (!focus.length) { toast("Pick at least one focus area, so it can show up as a swap."); return; }
+  if (!focus.length) { toast("Pick at least one focus area, so it can show up as an option in Library."); return; }
   const joints = {}; document.querySelectorAll("[data-joint]").forEach(sel => { if (+sel.value) joints[sel.dataset.joint] = +sel.value; });
   const areaByLabel = Object.fromEntries(Object.entries(JOINTS).map(([k, l]) => [l.toLowerCase(), k]));
   const risks = $("#lib-risks").value.split("\n").map(x => x.trim()).filter(Boolean).map(line => {
@@ -1130,6 +1138,54 @@ function drawA11y() {
   </div></div>`;
 }
 
+
+// ---------------------------------------------------------------- CREW: everyone's progress in one place
+function crewStats(id) {
+  const t = TODAY(); const ci = S.cycleInfo(t, cycleStart()); const wk = S.mondayOf(t);
+  const trained = S.userSessions(state.data.sessions, id).filter(x => (x.exercises || []).some(e => e.sets?.length));
+  const inCycle = trained.filter(x => x.date >= ci.start && x.date <= ci.end);
+  const sets = inCycle.reduce((n, x) => n + (x.exercises || []).reduce((m, e) => m + (e.sets?.length || 0), 0), 0);
+  const lbs = Math.round(inCycle.reduce((n, x) => n + (x.exercises || []).reduce((m, e) => m + F.volumeOf(e), 0), 0));
+  const prs = F.prEvents(state.data.sessions, id).filter(e => e.date >= ci.start && e.date <= ci.end);
+  const cardio = inCycle.reduce((n, x) => n + (x.cardio?.done ? +x.cardio.minutes || 0 : 0), 0);
+  return { days: new Set(trained.map(x => x.date)), week: trained.filter(x => x.date >= wk).length, cycle: inCycle.length, sets, lbs, prs, cardio,
+    streak: F.streaks(state.data.sessions, id, t), badges: F.earnedBadges(state.data.sessions, state.data.body, state.data.activities, id, t).size,
+    last: trained.map(x => x.date).sort().pop() || null, ci, wk };
+}
+const SHARE_LABEL = { all: "Everything", trained: "Just that I trained", none: "Nothing" };
+function viewCrew() {
+  const ids = profileIds(); const me = state.user; const t = TODAY();
+  const st = Object.fromEntries(ids.map(id => [id, crewStats(id)]));
+  const ci = st[me]?.ci || S.cycleInfo(t, cycleStart()); const wk = S.mondayOf(t);
+  const week = Array.from({ length: 7 }, (_, i) => S.addDays(wk, i));
+  const visible = ids.filter(id => id === me || shareOf(id) !== "none");
+  const full = ids.filter(id => canSee(id));
+  const tot = full.reduce((a, id) => ({ w: a.w + st[id].cycle, s: a.s + st[id].sets, l: a.l + st[id].lbs, p: a.p + st[id].prs.length }), { w: 0, s: 0, l: 0, p: 0 });
+  const DN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const card = id => {
+    const x = st[id]; const p = P(id); const mine = id === me; const lvl = shareOf(id);
+    const head = `<div class="between"><h3 class="h3 crew-name">${avatarHtml(id)} ${esc(p.name)}${mine ? ` <span class="tag orig">You</span>` : ""}</h3>${!mine && funAt("medium") ? `<button class="btn small" data-act="hi5to" data-u="${esc(id)}" aria-label="High-five ${esc(p.name)}">🙌 High-five</button>` : ""}</div>`;
+    const basic = `<div class="stats crew-stats"><div class="stat"><div class="v">${x.week}</div><div class="l">Workouts this week</div></div><div class="stat"><div class="v">${x.streak.current}</div><div class="l">Week streak</div></div><div class="stat"><div class="v">${x.last ? esc(S.fmtDate(x.last)) : "—"}</div><div class="l">Last workout</div></div></div>`;
+    const more = `<div class="stats crew-stats"><div class="stat"><div class="v">${x.cycle}</div><div class="l">Workouts this cycle</div></div><div class="stat"><div class="v">${x.sets}</div><div class="l">Sets this cycle</div></div><div class="stat"><div class="v">${x.lbs.toLocaleString()}</div><div class="l">Pounds moved</div></div><div class="stat"><div class="v">${x.cardio}</div><div class="l">Cardio minutes</div></div><div class="stat"><div class="v">${x.badges}</div><div class="l">Badges</div></div></div>
+      ${x.prs.length ? (() => { const names = [...new Set(x.prs.map(e => String(e.name).replace(/, (\d+ sets?)$/, " ($1)")))]; return `<p class="small"><b>Personal bests this cycle:</b> ${esc(names.length > 5 ? `${names.slice(0, 5).join(", ")}, and ${names.length - 5} more` : listText(names))}.</p>`; })() : `<p class="small muted">No new personal bests yet this cycle.</p>`}`;
+    const privacy = mine ? `<div class="field crew-privacy"><span id="share-lbl">What the crew sees of your progress</span>${seg("setShare", lvl, Object.entries(SHARE_LABEL), "What the crew sees")}
+      <p class="small muted">${lvl === "all" ? "Your crew sees everything on this card, plus your Progress and Body tabs." : lvl === "trained" ? "Your crew sees which days you trained and your streak. Numbers, Progress, and Body stay hidden." : "Your crew sees only that you're a member. You still see everything here."} This hides it in the app. Crewmates' phones still receive your workouts so partner mode works.</p></div>` : "";
+    if (!mine && lvl === "none") return "";
+    return `<section class="card crew-card">${head}${mine || lvl !== "none" ? basic : ""}${mine || lvl === "all" ? more : `<p class="small muted">${esc(p.name)} shares just the days they trained.</p>`}${privacy}</section>`;
+  };
+  const hidden = ids.filter(id => id !== me && shareOf(id) === "none");
+  return `<section class="card"><h2 class="h2">${esc(state.auth.crew?.name || "Crew")}</h2>
+      <p class="small muted">Cycle ${esc(S.fmtDate(ci.start))} to ${esc(S.fmtDate(ci.end))} · Week ${esc(ci.week)}</p>
+      ${full.length > 1 ? `<div class="stats crew-stats"><div class="stat"><div class="v">${tot.w}</div><div class="l">Workouts together this cycle</div></div><div class="stat"><div class="v">${tot.s}</div><div class="l">Sets</div></div><div class="stat"><div class="v">${tot.l.toLocaleString()}</div><div class="l">Pounds moved</div></div><div class="stat"><div class="v">${tot.p}</div><div class="l">Personal bests</div></div></div>` : ""}
+    </section>
+    <section class="card"><h3 class="h3">This week</h3>
+      <div class="scroll"><table class="t crew-week"><caption class="visually-hidden">Who trained each day this week</caption><thead><tr><th scope="col">Person</th>${week.map((d, i) => `<th scope="col" class="${d === t ? "today" : ""}"><span aria-hidden="true">${DN[i][0]}</span><span class="visually-hidden">${DN[i]}</span></th>`).join("")}</tr></thead>
+      <tbody>${visible.map(id => `<tr><th scope="row">${avatarHtml(id)} ${esc(P(id).name)}</th>${week.map(d => { const did = st[id].days.has(d); return `<td class="${did ? "did" : ""} ${d === t ? "today" : ""}">${did ? `<span aria-hidden="true">✓</span><span class="visually-hidden">trained</span>` : d > t ? "" : `<span aria-hidden="true">·</span><span class="visually-hidden">rest</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></section>
+    ${ids.map(card).join("")}
+    ${hidden.length ? `<p class="small muted">${esc(listText(hidden.map(id => P(id).name)))} ${hidden.length === 1 ? "keeps" : "keep"} their progress private.</p>` : ""}
+    ${crewCard()}`;
+}
+
 // ---------------------------------------------------------------- calendar & badges & points
 function progCalendar() {
   const ids = profileIds(); const m = state.calMonth || TODAY().slice(0, 7);
@@ -1166,8 +1222,8 @@ function progPoints() {
 // ---------------------------------------------------------------- PROGRESS
 function viewProgress() {
   const tab = state.progTab;
-  const tabs = [["lifts", "Lifts"], ["focus", "Focus"], ["cardio", "Cardio"], ["pain", "Pain"], ["calendar", "Calendar"], ["badges", "Badges"], ...(funAt("full") ? [["points", "Points"]] : []), ["history", "History"]];
-  const fns = { lifts: progLifts, focus: progFocus, cardio: progCardio, pain: progPain, calendar: progCalendar, badges: progBadges, points: progPoints, history: progHistory };
+  const tabs = [["lifts", "Lifts"], ["focus", "Focus"], ["cardio", "Cardio"], ["pain", "Pain"], ["calendar", "Calendar"], ["badges", "Badges"], ...(funAt("full") ? [["points", "Points"]] : []), ["history", "History"], ["report", "Cycle report"]];
+  const fns = { lifts: progLifts, focus: progFocus, cardio: progCardio, pain: progPain, calendar: progCalendar, badges: progBadges, points: progPoints, history: progHistory, report: progReport };
   const body = (fns[tab] || progLifts)();
   return `<section class="card"><div class="between"><h2 class="h2">Progress</h2>${personToggle()}</div>
     ${seg("progTab", tab, tabs, "Section")}</section>${body}`;
@@ -1235,7 +1291,7 @@ function progCardio() {
 function progPain() {
   const u = state.viewUser; const ss = S.userSessions(state.data.sessions, u).filter(s => s.pain);
   return `<section class="card"><h3 class="h3">Pain over time</h3>${ss.length ? `<div class="chart-box"><canvas id="chart-pain"></canvas></div>` : `<p class="muted">Check-ins show up here.</p>`}
-    <p class="small muted">A line trending down means healing. A spike after a certain day points at the exercise to swap. The cycle report lists which exercises you did on high-pain days.</p></section>`;
+    <p class="small muted">A line trending down means healing. A spike after a certain day points at the exercise to change. The cycle report lists which exercises you did on high-pain days.</p></section>`;
 }
 function progHistory() {
   const u = state.viewUser; const ss = S.userSessions(state.data.sessions, u).reverse();
@@ -1280,9 +1336,9 @@ function bodyForm(u) {
 }
 
 // ---------------------------------------------------------------- REPORT
-function viewReport() {
-  return `<section class="card"><div class="between"><h2 class="h2">Report</h2>${personToggle()}</div>
-    ${seg("repTab", state.repTab, [["cycle", "Cycle report"], ["compare", "Before & after"]], "Report type")}</section>
+// The cycle report now lives under Progress.
+function progReport() {
+  return `<section class="card">${seg("repTab", state.repTab, [["cycle", "Cycle report"], ["compare", "Before & after"]], "Report type")}</section>
     ${state.repTab === "cycle" ? repCycle() : repCompare()}`;
 }
 function cycleList() {
@@ -1494,6 +1550,7 @@ function setValue(c, f, val, typingIn) {
 
 // ---------------------------------------------------------------- events
 function go(view) {
+  if (view === "report") { view = "progress"; state.progTab = "report"; }
   state.view = view; state.confirmDel = null; store.set("twp-view", view); render(); scrollTo(0, 0);
   const h = $("#main h2, #main h1, #main h3"); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
   A.announce(`${VIEW_NAMES[view]} tab`);
@@ -1595,6 +1652,9 @@ document.addEventListener("click", e => {
     }
     case "focusGo": { const n = +el.dataset.n; if (n >= 0 && n < (state.focusCount || 99)) { state.focusStep = n; render(); scrollTo(0, 0); const h = $("#main .focus-head + * .name, #main .focus-head + * summary, #main .focus-head + * h3"); h?.setAttribute("tabindex", "-1"); h?.focus({ preventScroll: true }); A.announce(`Step ${n + 1}`); } break; }
     case "focusAll": state.focusAll = true; render(); break;
+    case "setShare": saveProfile(state.user, { share: v }); A.announce(`Sharing set to ${SHARE_LABEL[v]}`); setTimeout(render, 60); break;
+    case "goCrew": closeOverlay(); go("crew"); break;
+    case "hi5to": { const to = el.dataset.u; save("pings", `to_${to}`, { from: state.user, to, at: Date.now() }); toast(F.say(P(state.user).voice, "hi5sent", { name: P(to).name })); A.buzz(40); break; }
     case "toggleEx": {
       const card = el.closest("[data-ex]"); const u = LU(), date = LD(); const k = openKey(u, date);
       const m = store.get(k, {}); const opening = el.getAttribute("aria-expanded") !== "true"; m[card.dataset.ex] = opening; store.set(k, m);
@@ -1918,8 +1978,11 @@ function viewCrewSetup() {
   </section>`;
 }
 function crewSettings() {
+  return `<section class="card"><h3 class="h3">Crew</h3><p class="small">Invite code, members, and everyone's progress are on the Crew tab.</p><button class="btn small" data-act="goCrew">Open the Crew tab</button></section>${accountCard()}`;
+}
+function crewCard() {
   const a = state.auth; const owner = isOwner();
-  return `<section class="card"><h3 class="h3">Crew</h3>
+  return `<section class="card"><h3 class="h3">Crew members and invite code</h3>
     ${owner ? `<label class="field">Crew name<input type="text" data-act="crewRename" value="${esc(a.crew?.name || "")}"></label>` : `<p><b>${esc(a.crew?.name || "")}</b></p>`}
     <div class="field"><span>Invite code (share it with new members)</span>
       <div class="row"><b class="mono" style="font-size:1.5rem;letter-spacing:.2em" id="invite-code">${esc(a.crew?.code || "")}</b><button class="btn small" data-act="copyCode">Copy</button>${owner ? `<button class="btn small" data-act="newCode">New code</button>` : ""}</div></div>
@@ -1929,8 +1992,11 @@ function crewSettings() {
     ${owner ? `<details class="more" ${a.legacy ? "open" : ""}><summary>Bring over data from the first version</summary><div class="panel small">
       <p>Copies the workouts, body entries, library, profiles, and settings saved before crews existed into this crew. Run it once.</p>
       ${a.legacy ? `<p><b>${a.legacy.count}</b> items found.</p><button class="btn primary" data-act="legacyCopy">Copy ${a.legacy.count} item${a.legacy.count === 1 ? "" : "s"} into this crew</button>` : `<button class="btn" data-act="legacyCheck">Look for old data</button>`}</div></details>` : ""}
-  </section>
-  <section class="card"><h3 class="h3">Account</h3>
+  </section>`;
+}
+function accountCard() {
+  const a = state.auth;
+  return `<section class="card"><h3 class="h3">Account</h3>
     <p class="small">Signed in as <b>${esc(a.user.email)}</b> with ${listText(a.user.providers.map(p => p === "google.com" ? "Google" : p === "password" ? "email + password" : p))}.</p>
     ${a.user.providers.includes("google.com") ? "" : `<button class="btn small" data-act="linkGoogle">Also sign in with Google</button>`}
     ${a.user.providers.includes("password") ? `<button class="btn small" data-act="authResetMe">Change password (sends an email)</button>` : `<div class="row" style="align-items:end"><label class="field" style="flex:1">Add a password<input type="password" id="link-pw" minlength="6" autocomplete="new-password"></label><button class="btn small" data-act="linkPassword">Add</button></div><p class="small muted">Then you can sign in with ${esc(a.user.email)} and this password if Google sign-in gives you trouble.</p>`}
