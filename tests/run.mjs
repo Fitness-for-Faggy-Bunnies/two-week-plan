@@ -129,6 +129,20 @@ for (const b of BUILTIN) {
   for (const [pid, ids] of Object.entries(PLAN_MACHINES)) { yes(`plan exercise ${pid} exists`, !!ALL_EX[pid]); for (const id of ids) yes(`${pid} → ${id} exists`, MACHINES.some(m => m.id === id)); }
   for (const m of MACHINES) yes(`${m.id} has a setup tip and isn't a dumbbell`, m.tip.length > 20 && m.equip === "machine" && m.db === false);
 }
+// Which day the Workout tab opens on (cycle starts Mon Sep 28: Week A Sep 28–Oct 4, Week B Oct 5–11).
+{
+  const s = (date, week, day) => ({ user: "mat", date, week, day, exercises: [{ id: "x", sets: [{ w: 1, r: 1 }] }] });
+  // Last week: Week A Wed, Thu, and Mon (made up Friday). Week A Tue never done.
+  const lastWeek = [s("2026-09-30", "A", "Wed"), s("2026-10-01", "A", "Thu"), s("2026-10-02", "A", "Mon")];
+  const pd = (sessions, today) => { const r = S.pickDay(sessions, "mat", today, "2026-09-28"); return r.week + r.day; };
+  yes("Tue of Week B (Mon skipped) opens Week B Tue, not leftover Week A Tue", pd(lastWeek, "2026-10-06") === "BTue");
+  const midWeek = [...lastWeek, s("2026-10-06", "B", "Tue"), s("2026-10-07", "B", "Wed"), s("2026-10-08", "B", "Thu")];
+  yes("Friday after skipping Monday opens Week B Mon", pd(midWeek, "2026-10-09") === "BMon");
+  yes("a workout logged today keeps that day open", pd([...midWeek, s("2026-10-09", "B", "Mon")], "2026-10-09") === "BMon");
+  yes("whole week done on Friday opens next week's Mon", pd([...midWeek, s("2026-10-05", "B", "Mon")], "2026-10-09") === "AMon");
+  yes("Sunday before a new cycle opens Week A Mon", pd(lastWeek, "2026-10-11") === "BMon" || pd(lastWeek, "2026-10-11") === "AMon");
+  yes("Monday of Week A in a new cycle opens Week A Mon", pd(midWeek, "2026-10-12") === "AMon");
+}
 // ---------------------------------------------------------------- accessibility settings
 {
   const mem = {}; globalThis.localStorage = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };

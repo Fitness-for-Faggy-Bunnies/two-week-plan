@@ -29,6 +29,28 @@ export function cycleInfo(date, cycleStart) {
   return { index: idx, start, end: addDays(start, 13), week: ((weeks % 2) + 2) % 2 === 0 ? "A" : "B" };
 }
 
+// Which plan day the Workout tab opens on.
+//  1. A workout already logged today: that day.
+//  2. Today's own plan day (Mon–Thu of this cycle week), if it isn't done yet.
+//  3. The first day of this cycle week that isn't done (a skipped Monday comes up on Friday).
+//  4. This week all done: next week's Monday.
+// Days missed in an earlier week don't pull you back; you can always tap them.
+export function pickDay(sessions, user, today, cycleStart) {
+  const DAYS = ["Mon", "Tue", "Wed", "Thu"];
+  const logged = x => (x.exercises || []).some(e => e.sets?.length);
+  const mine = sessions.filter(x => x.user === user);
+  const todays = mine.find(x => x.date === today && x.week && x.day && logged(x));
+  if (todays) return { week: todays.week, day: todays.day };
+  const cyc = cycleInfo(today, cycleStart);
+  const done = new Set(mine.filter(x => x.date >= cyc.start && x.date <= cyc.end && logged(x)).map(x => `${x.week}${x.day}`));
+  const week = cyc.week;
+  const dow = (parseYmd(today).getDay() + 6) % 7; // Mon = 0
+  if (dow <= 3 && !done.has(`${week}${DAYS[dow]}`)) return { week, day: DAYS[dow] };
+  const open = DAYS.find(d => !done.has(`${week}${d}`));
+  if (open) return { week, day: open };
+  return { week: cycleInfo(addDays(mondayOf(today), 7), cycleStart).week, day: "Mon" };
+}
+
 // ---- sets --------------------------------------------------------------
 export function parseRange(sr) {
   const m = String(sr).match(/(\d+)\s*×\s*(\d+)(?:\s*[–-]\s*(\d+))?/);

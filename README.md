@@ -5,7 +5,7 @@ Benny and Mat's Monday–Thursday workout plan and tracker. It runs on GitHub Pa
 ## What it does
 
 **At the gym (Workout tab)**
-- Each plan day (Week A Monday, Week B Tuesday, …) keeps its own log for the cycle, even when two are done on the same date (make-up days). A workout counts for the plan day whose exercises are in it, whatever the date it was done; the app opens on the first plan day not yet done this cycle. Progress, history, and reports combine everything by date.
+- Each plan day (Week A Monday, Week B Tuesday, …) keeps its own log for the cycle, even when two are done on the same date (make-up days). A workout counts for the plan day whose exercises are in it, whatever the date it was done; the app opens on today's plan day, or the first day of this week not done yet (a skipped Monday comes up on Friday); days missed in an earlier week don't pull you back. Progress, history, and reports combine everything by date.
 - Today's plan with Standard, Harder, Alternative, and Library versions of every exercise, each with instructions, form videos, joint load, and specific injury risks. A note under the buttons explains the one that's picked.
 - Start workout → timer → Finish workout, with a summary: time, sets, pounds moved, personal bests.
 - Warm-up for each day, with ramp-up sets for the first lift worked out from your weights.

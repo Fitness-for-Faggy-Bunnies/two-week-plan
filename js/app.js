@@ -12,7 +12,7 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "19";
+const APP_VERSION = "20";
 // The app's name lives here only (plus manifest.webmanifest and the <title> tags in index.html, which can't read JS).
 const APP_NAME = "Two-Week Split";
 const $ = (s, r = document) => r.querySelector(s);
@@ -148,15 +148,7 @@ const LD = () => (state.sel ? sessionFor(LU(), BASE_DATE())?.date : null) || BAS
 
 // Open on the first plan day in this cycle that isn't done yet (A Mon → B Thu), whatever today's date is.
 // Only when all eight are done does it fall back to the calendar.
-function autoSel() {
-  const t = TODAY(); const cyc = S.cycleInfo(t, cycleStart()); const u = LU();
-  const done = new Set(state.data.sessions.filter(x => x.user === u && x.date >= cyc.start && x.date <= cyc.end && (x.exercises || []).some(e => e.sets?.length)).map(x => `${x.week}${x.day}`));
-  for (const week of ["A", "B"]) for (const day of DAYS) if (!done.has(`${week}${day}`)) return { week, day };
-  const dow = new Date().getDay();
-  if (dow >= 1 && dow <= 4) return { week: S.cycleInfo(t, cycleStart()).week, day: DAYS[dow - 1] };
-  const nextMon = S.addDays(t, dow === 0 ? 1 : 8 - dow);
-  return { week: S.cycleInfo(nextMon, cycleStart()).week, day: "Mon" };
-}
+function autoSel() { return S.pickDay(state.data.sessions, LU(), TODAY(), cycleStart()); }
 const variantOf = (u, ex) => state.variants[`${u}:${ex.id}`] || (P(u).defaultVariant === "hard" && ex.h ? "hard" : "std");
 
 // ---------------------------------------------------------------- sessions: one document per person per plan day
