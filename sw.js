@@ -1,7 +1,7 @@
 // Offline support: the app shell is cached so it opens with no signal.
 // Workout data is handled separately by Firestore's own offline cache.
 // Bump VERSION whenever you change files, so phones pick up the update.
-const VERSION = "twp-v21";
+const VERSION = "twp-v22";
 const SHELL = [
   "./", "index.html", "css/styles.css",
   "js/app.js", "js/plan.js", "js/stats.js", "js/firebase.js", "js/library.js", "js/fun.js", "js/safety.js", "js/timer.js", "js/a11y.js", "js/icons.js",
@@ -25,6 +25,8 @@ self.addEventListener("fetch", e => {
   const sameOrigin = url.origin === self.location.origin;
   if (!sameOrigin && !CDN.includes(url.hostname)) return; // never touch Firestore or auth traffic
   if (url.hostname === "www.gstatic.com" && !url.pathname.startsWith("/firebasejs/")) return;
+  // Version checks and forced updates always go to the server.
+  if (sameOrigin && (url.searchParams.has("check") || url.pathname.endsWith("/sw.js") || req.cache === "reload" || req.cache === "no-store")) return;
   e.respondWith(caches.open(VERSION).then(async cache => {
     const cached = await cache.match(req, { ignoreSearch: sameOrigin });
     const network = fetch(req).then(res => { if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone()); return res; }).catch(() => cached);

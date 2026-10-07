@@ -12,7 +12,7 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "21";
+const APP_VERSION = "22";
 // The app's name lives here only (plus manifest.webmanifest and the <title> tags in index.html, which can't read JS).
 const APP_NAME = "Two-Week Split";
 const $ = (s, r = document) => r.querySelector(s);
@@ -1109,6 +1109,9 @@ function openSettings() {
   const one = (act, cur, opts) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}">${esc(l)}</button>`).join("")}</div>`;
   $("#overlay").innerHTML = `<div class="overlay" role="dialog" aria-label="Settings"><div class="inner">
     <div class="between"><h2 class="h2">Settings</h2><button class="btn small" data-act="closeOverlay">Close</button></div>
+    <section class="card"><h3 class="h3">App version ${APP_VERSION}</h3>
+      <p class="small">The app updates itself when it opens. If something looks out of date, tap below to get the newest version right now.</p>
+      <button class="btn primary block" data-act="updateApp">Update app</button></section>
     <section class="card"><h3 class="h3">Accessibility</h3>
       <p class="small">${a11yOn() ? `${a11yOn()} option${a11yOn() === 1 ? "" : "s"} changed.` : "Text size, contrast, reading fonts, spoken timers, screen flashes, one-step-at-a-time, and more."}</p>
       <button class="btn primary" data-act="openA11y">Accessibility options</button></section>
@@ -1639,6 +1642,7 @@ document.addEventListener("click", e => {
     case "resetAccent": saveProfile(state.user, { accent: "" }); setTimeout(() => { applyAppearance(); openSettings(); render(); }, 60); break;
     case "setText": setA11y({ textSize: v }); openSettings(); break;
     case "openA11y": openA11y(); break;
+    case "updateApp": closeOverlay(); checkForUpdate(true); break;
     case "a11ySet": { const k = el.dataset.k; const cur = A.DEFAULTS[k]; setA11y({ [k]: typeof cur === "number" ? +v : v }); A.announce(`${el.textContent} selected`); break; }
     case "a11yPreset": setA11y(A.applyPreset(v)); A.announce(`${A.PRESETS[v].label} options turned on`); toast(`${A.PRESETS[v].label} options are on.`); break;
     case "a11yReset": A.reset(); setA11y({}); A.announce("Accessibility options reset"); break;
@@ -2091,3 +2095,34 @@ if ("serviceWorker" in navigator) {
   // When a new version installs, reload once so both phones run the same code.
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !state.overlay) location.reload(); });
 }
+// ---------------------------------------------------------------- updates
+// Every time the app opens (or comes back to the front), ask the server which version is live.
+// If it's newer than this copy, throw the old copy away and reload. No buttons needed.
+const SHELL_FILES = ["./", "index.html", "css/styles.css", "js/app.js", "js/plan.js", "js/stats.js", "js/firebase.js", "js/library.js", "js/fun.js", "js/safety.js", "js/timer.js", "js/a11y.js", "js/icons.js", "manifest.webmanifest", "sw.js"];
+async function liveVersion() {
+  try { const r = await fetch(`sw.js?check=${Date.now()}`, { cache: "no-store" }); const m = /VERSION = "twp-v(\d+)"/.exec(await r.text()); return m ? m[1] : null; } catch { return null; }
+}
+async function forceUpdate(show = true) {
+  if (show) toast("Updating to the latest version…");
+  try {
+    for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister();
+    for (const k of (await caches?.keys?.()) || []) await caches.delete(k);
+    // Refresh the browser's own copy of every file too, so nothing old sneaks back in.
+    await Promise.all(SHELL_FILES.map(f => fetch(f, { cache: "reload" }).catch(() => {})));
+  } catch { /* best effort */ }
+  try { sessionStorage.setItem("twp-updated-from", APP_VERSION); } catch { /* ignore */ }
+  location.replace(location.pathname + "?v=" + Date.now());
+}
+async function checkForUpdate(manual = false) {
+  const live = await liveVersion();
+  if (!live) { if (manual) toast("Couldn't reach the server. Check your connection and try again."); return; }
+  if (+live > +APP_VERSION) {
+    let tried = null; try { tried = sessionStorage.getItem("twp-tried-" + live); sessionStorage.setItem("twp-tried-" + live, "1"); } catch { /* ignore */ }
+    if (!tried || manual) forceUpdate(true);
+  } else if (manual) {
+    forceUpdate(false); // already current: still refresh everything, as asked
+  }
+}
+setTimeout(() => checkForUpdate(false), 1500);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(false); });
+try { const from = sessionStorage.getItem("twp-updated-from"); if (from) { sessionStorage.removeItem("twp-updated-from"); setTimeout(() => toast(from === APP_VERSION ? `Up to date: version ${APP_VERSION}.` : `Updated to version ${APP_VERSION}.`), 800); } } catch { /* ignore */ }
