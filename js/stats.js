@@ -39,9 +39,10 @@ export function pickDay(sessions, user, today, cycleStart) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu"];
   const logged = x => (x.exercises || []).some(e => e.sets?.length);
   const mine = sessions.filter(x => x.user === user);
-  const todays = mine.find(x => x.date === today && x.week && x.day && logged(x));
-  if (todays) return { week: todays.week, day: todays.day };
   const cyc = cycleInfo(today, cycleStart);
+  // Only a workout from this week's plan counts here; one saved under an earlier week's day doesn't pull the app back.
+  const todays = mine.find(x => x.date === today && x.week === cyc.week && x.day && logged(x));
+  if (todays) return { week: todays.week, day: todays.day };
   const done = new Set(mine.filter(x => x.date >= cyc.start && x.date <= cyc.end && logged(x)).map(x => `${x.week}${x.day}`));
   const week = cyc.week;
   const dow = (parseYmd(today).getDay() + 6) % 7; // Mon = 0

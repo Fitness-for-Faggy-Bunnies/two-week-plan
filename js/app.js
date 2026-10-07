@@ -12,7 +12,7 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "20";
+const APP_VERSION = "21";
 // The app's name lives here only (plus manifest.webmanifest and the <title> tags in index.html, which can't read JS).
 const APP_NAME = "Two-Week Split";
 const $ = (s, r = document) => r.querySelector(s);
@@ -199,7 +199,7 @@ function relabel() {
   relabeling = true;
   for (const s of state.data.sessions) {
     const r = inferredSlot(s);
-    if (r && (r.week !== s.week || r.day !== s.day)) { s.week = r.week; s.day = r.day; patch("sessions", s.id, { week: r.week, day: r.day }); }
+    if (r && !s.moved && (r.week !== s.week || r.day !== s.day)) { s.week = r.week; s.day = r.day; patch("sessions", s.id, { week: r.week, day: r.day }); }
   }
   relabeling = false;
 }
@@ -352,7 +352,8 @@ function viewToday() {
     ${funHeader(u)}
     ${workoutBar(u, date, s)}
     <details class="more row-disclosure"><summary>${esc(p.name)}'s focus, notes, and date${icon("chevron", 20, { stroke: 2 })}</summary><div class="panel"><p>${esc(p.focusNote)}</p><ul class="small">${(p.notes || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
-      <label class="field">Logging date<input type="date" data-act="logDate" value="${date}"></label></div></details>
+      <label class="field">Logging date<input type="date" data-act="logDate" value="${date}"></label>
+      ${s ? `<div class="field"><span id="move-lbl">This workout is saved as Week ${esc(week)} ${esc(DAY_NAMES[day])}. Move it to:</span><div class="row" role="group" aria-labelledby="move-lbl">${["A", "B"].flatMap(w => DAYS.map(d => [w, d])).filter(([w, d]) => w !== week || d !== day).map(([w, d]) => `<button type="button" class="btn small" data-act="moveWorkout" data-v="${w}${d}">Week ${w} ${d}</button>`).join("")}</div></div>` : ""}</div></details>
     <div class="row"><button class="btn small" data-act="planEdit" aria-pressed="${!!state.planEdit}">${state.planEdit ? "Done editing plan" : "Edit this day's plan"}</button>
       ${funAt("medium") && partner !== u ? `<button class="btn small" data-act="hi5">🙌 High-five ${esc(P(partner).name)}</button>` : ""}</div>
     ${state.planEdit ? planEditBox(u, week, day) : ""}
@@ -1718,6 +1719,15 @@ document.addEventListener("click", e => {
     }
     case "focusGo": { const n = +el.dataset.n; if (n >= 0 && n < (state.focusCount || 99)) { state.focusStep = n; render(); scrollTo(0, 0); const h = $("#main .focus-head + * .name, #main .focus-head + * summary, #main .focus-head + * h3"); h?.setAttribute("tabindex", "-1"); h?.focus({ preventScroll: true }); A.announce(`Step ${n + 1}`); } break; }
     case "focusAll": state.focusAll = true; render(); break;
+    case "moveWorkout": {
+      const s = sessionFor(LU(), LD()); if (!s) break;
+      const week = v[0], day = v.slice(1);
+      const clash = state.data.sessions.find(x => x !== s && x.user === s.user && x.week === week && x.day === day && S.cycleInfo(x.date, cycleStart()).index === S.cycleInfo(s.date, cycleStart()).index && (x.exercises || []).some(e => e.sets?.length));
+      if (clash) { toast(`Week ${week} ${DAY_NAMES[day]} already has a workout this cycle (${S.fmtDate(clash.date)}). Move that one first.`); break; }
+      s.week = week; s.day = day; patch("sessions", s.id, { week, day, moved: true });
+      state.sel = { week, day }; state.userTouchedSel = true; render();
+      toast(`Moved to Week ${week} ${DAY_NAMES[day]}.`); A.announce(`Workout moved to Week ${week} ${DAY_NAMES[day]}`); break;
+    }
     case "setShare": saveProfile(state.user, { share: v }); A.announce(`Sharing set to ${SHARE_LABEL[v]}`); setTimeout(render, 60); break;
     case "goCrew": closeOverlay(); go("crew"); break;
     case "hi5to": { const to = el.dataset.u; save("pings", `to_${to}`, { from: state.user, to, at: Date.now() }); toastV("hi5sent", { name: P(to).name }); A.buzz(40); break; }
