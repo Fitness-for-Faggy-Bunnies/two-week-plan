@@ -784,3 +784,7 @@ body[data-skin="lanai"] .stat .v{font-weight:400}
 body:is([data-skin="bunny"],[data-skin="lanai"]) .stat .v small{font-family:var(--body);font-style:normal;font-size:.8125rem;font-weight:600}
 .chips.day-tiles button[aria-pressed="true"] .d{color:var(--ink)}
 body:is([data-skin="bunny"],[data-skin="lanai"]) .chips.day-tiles button[aria-pressed="true"] .d{color:var(--accent-text)}
+.day-tiles .dt{font-weight:600;letter-spacing:.04em;opacity:.9}
+.day-tiles button{position:relative}
+.day-tiles .today-dot{position:absolute;bottom:4px;font:700 .625rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text)}
+.chips.day-tiles button{height:80px}

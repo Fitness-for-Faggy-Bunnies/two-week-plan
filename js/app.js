@@ -12,7 +12,7 @@ import { connect, save, remove, patch, dropField, signOutAndClear, importAll, CO
 
 // ---------------------------------------------------------------- helpers
 // Shown at the bottom of Settings so you can tell whether a phone has the latest update. Bump with sw.js VERSION.
-const APP_VERSION = "22";
+const APP_VERSION = "23";
 // The app's name lives here only (plus manifest.webmanifest and the <title> tags in index.html, which can't read JS).
 const APP_NAME = "Two-Week Split";
 const $ = (s, r = document) => r.querySelector(s);
@@ -148,6 +148,11 @@ const LD = () => (state.sel ? sessionFor(LU(), BASE_DATE())?.date : null) || BAS
 
 // Open on the first plan day in this cycle that isn't done yet (A Mon → B Thu), whatever today's date is.
 // Only when all eight are done does it fall back to the calendar.
+// The calendar date each plan day lands on in the current cycle (Week A Mon = the cycle start).
+function slotDate(week, day) {
+  const cyc = S.cycleInfo(BASE_DATE(), cycleStart());
+  return S.addDays(cyc.start, (week === "B" ? 7 : 0) + DAYS.indexOf(day));
+}
 function autoSel() { return S.pickDay(state.data.sessions, LU(), TODAY(), cycleStart()); }
 const variantOf = (u, ex) => state.variants[`${u}:${ex.id}`] || (P(u).defaultVariant === "hard" && ex.h ? "hard" : "std");
 
@@ -197,6 +202,25 @@ let relabeling = false;
 function relabel() {
   if (relabeling || state.flags.sessions?.fromCache) return;
   relabeling = true;
+  // A record holding exercises from two plan days (from the early date-only version) is split so each day gets its own.
+  for (const s of [...state.data.sessions]) {
+    if (s.moved) continue;
+    const bySlot = {};
+    for (const e of s.exercises || []) { const m = SLOT_RE.exec(e.id || ""); if (m && e.sets?.length) (bySlot[`${m[1].toUpperCase()}|${m[2][0].toUpperCase()}${m[2].slice(1)}`] ||= []).push(e); }
+    const slots = Object.keys(bySlot); if (slots.length < 2) continue;
+    const main = slots.sort((a, b) => bySlot[b].length - bySlot[a].length)[0];
+    for (const k of slots) {
+      if (k === main) continue;
+      const [week, day] = k.split("|");
+      const exists = state.data.sessions.find(x => x.user === s.user && x.week === week && x.day === day && S.cycleInfo(x.date, cycleStart()).index === S.cycleInfo(s.date, cycleStart()).index && x !== s);
+      const ex = Object.fromEntries(bySlot[k].map(e => [e.id, e]));
+      if (exists) patch("sessions", exists.id, { ex }); else patch("sessions", `${s.user}_${s.date}_${week}${day}`, { user: s.user, date: s.date, week, day, ex, splitFrom: s.id });
+      // Take them out of the original record (newer records keep exercises in a map, older ones in a list).
+      if (s.ex) for (const e of bySlot[k]) { if (s.ex[e.id]) dropField("sessions", s.id, ["ex", e.id]); }
+      const ids = new Set(bySlot[k].map(e => e.id));
+      if ((s.exercises || []).some(e => ids.has(e.id) && !(s.ex && s.ex[e.id]))) patch("sessions", s.id, { exercises: (s.exercises || []).filter(e => !ids.has(e.id) && !(s.ex && s.ex[e.id])) });
+    }
+  }
   for (const s of state.data.sessions) {
     const r = inferredSlot(s);
     if (r && !s.moved && (r.week !== s.week || r.day !== s.day)) { s.week = r.week; s.day = r.day; patch("sessions", s.id, { week: r.week, day: r.day }); }
@@ -301,7 +325,8 @@ function render() {
   document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   // Pick the day to open on. Until workouts have loaded (and unless you've tapped a day), keep re-picking.
   if (!state.sel || (!state.selSettled && !state.userTouchedSel)) {
-    const s = sessionFor(LU(), BASE_DATE(), null);
+    // Logging a past date: open that date's workout. Otherwise the plan day for today's date.
+    const s = state.logDate ? sessionFor(LU(), BASE_DATE(), null) : null;
     state.sel = s && s.week && s.day ? { week: s.week, day: s.day } : autoSel();
     if (state.flags.sessions && !state.flags.sessions.fromCache) state.selSettled = true;
   }
@@ -344,10 +369,13 @@ function viewToday() {
   ${state.partner ? `<section class="card"><span class="eyebrow">Partner mode · logging for</span>${personToggle("logUser", u)}</section>` : ""}
   ${state.logDate ? `<div class="banner">Logging for ${S.fmtDate(date)}. <button class="btn small" data-act="backToToday">Back to today</button></div>` : notToday ? `<div class="banner">Week ${esc(week)} ${esc(DAY_NAMES[day])} was logged on ${S.fmtDate(date)}.</div>` : ""}
   ${rem.length && !focusOn() ? `<section class="reminders" aria-labelledby="rem-title"><h2 class="rem-title" id="rem-title">${icon("pulse", 16, { stroke: 2 })}${rem.every(r => r.id === "weigh" || r.id === "measure") ? "Set your starting point" : "Reminders"}</h2>${rem.map(r => `<div class="rem"><p>${esc(r.text)}</p><button class="btn pill" data-act="goView" data-v="${r.view}">Open</button><button class="icon-btn round ghost" data-act="dismissRem" data-v="${r.id}" aria-label="Dismiss until tomorrow: ${esc(r.text)}">${icon("x", 18, { stroke: 2 })}</button></div>`).join("")}</section>` : ""}
+  ${(() => { const sd = slotDate(week, day); const any = s && ((s.exercises || []).some(e => e.sets?.length) || s.markedDone);
+    if (s?.markedDone && !(s.exercises || []).some(e => e.sets?.length)) return `<div class="banner">Marked done. No sets were logged for this day. <button class="btn small" data-act="unmarkDone">Undo</button></div>`;
+    return !any && sd < TODAY() ? `<div class="banner">${DAY_NAMES[day]}, ${S.fmtDate(sd)} has nothing logged. <button class="btn small" data-act="markDone">Mark this day done</button></div>` : ""; })()}
   ${dl ? `<div class="banner"><b>Lighter week</b> until ${S.fmtDate(deloadOf(u).to)}: about 60% of your usual weights and one less set. <button class="btn small" data-act="endDeload">End it early</button></div>` : dlSug ? `<div class="banner">${esc(dlSug)} <button class="btn small" data-act="startDeload">Start a lighter week</button></div>` : ""}
   <section class="today-top" aria-labelledby="today-title">
-    <div class="week-row"><span class="eyebrow">${ci.week === week && !notToday ? "This week" : "Viewing"}</span>${seg("selWeek", week, [["A", "Week A"], ["B", "Week B"]], "Week")}</div>
-    <div class="chips day-tiles" role="group" aria-label="Day">${DAYS.map(d => `<button data-act="selDay" data-v="${d}" aria-pressed="${d === day}" aria-label="${DAY_NAMES[d]}, ${esc(dayTitle(u, week, d))}"><span class="d" aria-hidden="true">${d}</span><span class="m" aria-hidden="true">${esc(dayTitle(u, week, d).split(",")[0])}</span></button>`).join("")}</div>
+    <div class="week-row"><span class="eyebrow">${ci.week === week ? "This week" : "Week " + week} · ${S.fmtDate(slotDate(week, "Mon"))} to ${S.fmtDate(slotDate(week, "Thu"))}</span>${seg("selWeek", week, [["A", "Week A"], ["B", "Week B"]], "Week")}</div>
+    <div class="chips day-tiles" role="group" aria-label="Day">${DAYS.map((d, i) => { const dt = slotDate(week, d); return `<button data-act="selDay" data-v="${d}" aria-pressed="${d === day}" aria-label="${DAY_NAMES[d]}, ${S.fmtDate(dt)}${dt === TODAY() ? ", today" : ""}, ${esc(dayTitle(u, week, d))}"><span class="d" aria-hidden="true">${d} <span class="dt">${S.fmtDate(dt).replace(/^\w+ /, "")}</span></span><span class="m" aria-hidden="true">${esc(dayTitle(u, week, d).split(",")[0])}</span>${dt === TODAY() ? `<span class="today-dot" aria-hidden="true">Today</span>` : ""}</button>`; }).join("")}</div>
     <div class="ring-row"><div class="today-title"><span class="eyebrow">Week ${week} · ${DAY_NAMES[day]}</span><h2 class="h2" id="today-title">${esc(dayTitle(u, week, day))}</h2></div>${funAt("medium") ? ring(done, list.length) : `<span class="small muted">${done} of ${list.length} done</span>`}</div>
     ${funHeader(u)}
     ${workoutBar(u, date, s)}
@@ -1723,6 +1751,8 @@ document.addEventListener("click", e => {
     }
     case "focusGo": { const n = +el.dataset.n; if (n >= 0 && n < (state.focusCount || 99)) { state.focusStep = n; render(); scrollTo(0, 0); const h = $("#main .focus-head + * .name, #main .focus-head + * summary, #main .focus-head + * h3"); h?.setAttribute("tabindex", "-1"); h?.focus({ preventScroll: true }); A.announce(`Step ${n + 1}`); } break; }
     case "focusAll": state.focusAll = true; render(); break;
+    case "markDone": writeSession(LU(), slotDate(state.sel.week, state.sel.day), { markedDone: true }); toast(`Week ${state.sel.week} ${DAY_NAMES[state.sel.day]} marked done.`); render(); break;
+    case "unmarkDone": { const s = sessionFor(LU(), LD()); if (s) patch("sessions", s.id, { markedDone: false }); render(); break; }
     case "moveWorkout": {
       const s = sessionFor(LU(), LD()); if (!s) break;
       const week = v[0], day = v.slice(1);

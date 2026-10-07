@@ -37,7 +37,7 @@ export function cycleInfo(date, cycleStart) {
 // Days missed in an earlier week don't pull you back; you can always tap them.
 export function pickDay(sessions, user, today, cycleStart) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu"];
-  const logged = x => (x.exercises || []).some(e => e.sets?.length);
+  const logged = x => (x.exercises || []).some(e => e.sets?.length) || !!x.markedDone;
   const mine = sessions.filter(x => x.user === user);
   const cyc = cycleInfo(today, cycleStart);
   // Only a workout from this week's plan counts here; one saved under an earlier week's day doesn't pull the app back.
